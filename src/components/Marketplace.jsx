@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import FeedEmptyState from './FeedEmptyState';
 
-export default function Marketplace({ user, role, tasks = [], bids = [], specialistStats = {}, realSpecialists = [], districtFilter, setDistrictFilter, syncPlatformEngineData, setActiveTab }) {
+export default function Marketplace({ user, role, tasks = [], bids = [], specialistStats = {}, districtFilter, setDistrictFilter, syncPlatformEngineData }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [bidAmounts, setBidAmounts] = useState({});
   const [bidNotes, setBidNotes] = useState({});
@@ -23,19 +23,25 @@ export default function Marketplace({ user, role, tasks = [], bids = [], special
   const handleSubmitBid = async (taskId) => {
     const amount = bidAmounts[taskId];
     const note = bidNotes[taskId];
-    if (!amount || !note) { alert('Please provide amount and a short pitch.'); return; }
+    if (!amount || !note) {
+      alert('Please provide amount and a short pitch.');
+      return;
+    }
 
     setIsSubmitting(prev => ({ ...prev, [taskId]: true }));
 
     try {
-      const { error } = await supabase
-        .from('bids')
-        .insert([{ task_id: taskId, specialist_id: user.id, amount: parseFloat(amount), note, status: 'pending' }]);
+      const { error } = await supabase.from('bids').insert([{
+        task_id: taskId,
+        specialist_id: user.id,
+        amount: parseFloat(amount),
+        note,
+        status: 'pending',
+      }]);
 
       if (error) throw error;
 
       if (syncPlatformEngineData) await syncPlatformEngineData();
-
       setSubmittedBids(prev => ({ ...prev, [taskId]: true }));
     } catch (err) {
       const isDuplicate = err?.code === '23505' || /duplicate/i.test(err?.message || err?.details || '');
@@ -52,77 +58,175 @@ export default function Marketplace({ user, role, tasks = [], bids = [], special
     }
   };
 
+  const [accepting, setAccepting] = useState({});
+
+  const handleAcceptBid = async (bid, task) => {
+    if (!bid || !task || !user) return alert('Missing context to accept bid.');
+    setAccepting(prev => ({ ...prev, [bid.id]: true }));
+
+    try {
+      // mark bid accepted
+      const { error: bidErr } = await supabase.from('bids').update({ status: 'accepted' }).eq('id', bid.id);
+      if (bidErr) throw bidErr;
+
+      // create workspace room for the accepted bid
+      const { error: roomErr } = await supabase.from('workspace_rooms').insert([{
+        task_id: task.id,
+        client_id: user.id,
+        specialist_id: bid.specialist_id || bid.user_id || null,
+        status: 'open'
+      }]);
+      if (roomErr) throw roomErr;
+
+      // update task state to in_progress
+      const { error: taskErr } = await supabase.from('tasks').update({ status: 'in_progress' }).eq('id', task.id);
+      if (taskErr) throw taskErr;
+
+      if (syncPlatformEngineData) await syncPlatformEngineData();
+
+      alert('Bid accepted — workspace created and task moved to in_progress.');
+      window.location.reload();
+    } catch (err) {
+      alert('Failed to accept bid: ' + (err?.message || err));
+    } finally {
+      setAccepting(prev => ({ ...prev, [bid.id]: false }));
+    }
+  };
+
   return (
-    <div style={{ padding: 16 }}>
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+    <div>
+      <div className="market-filter-grid">
         <input
           type="text"
+          className="market-search-input"
           placeholder="Search tasks or specialists..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          style={{ flex: 1, padding: 10, borderRadius: 8, border: '1px solid #334155', background: '#0f172a', color: '#f8fafc' }}
         />
 
-        <select value={districtFilter} onChange={(e) => setDistrictFilter(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #334155', background: '#0f172a', color: '#f8fafc' }}>
+        <select
+          className="market-select"
+          value={districtFilter}
+          onChange={(e) => setDistrictFilter(e.target.value)}
+        >
           <option value="all">All Regions</option>
           <option value="Tala">Tala</option>
           <option value="Shibin">Shibin</option>
         </select>
 
-        <button onClick={syncPlatformEngineData} className="btn-secondary">Refresh</button>
+        <button type="button" className="btn-secondary refresh-feed-btn" onClick={syncPlatformEngineData}>
+          Refresh
+        </button>
       </div>
 
-      <div>
-        {filteredTasks.length === 0 ? (
-          <FeedEmptyState variant="tasks" icon="📋" title="No tasks" description="No matching tasks found." onReset={() => { setSearchQuery(''); setDistrictFilter('all'); }} showReset={false} />
-        ) : (
-          filteredTasks.map(task => {
-            const matchingBids = bids.filter(b => b.task_id === task.id);
+      {filteredTasks.length === 0 ? (
+        <FeedEmptyState
+          variant="tasks"
+          icon="📋"
+          title="No tasks"
+          description="No matching tasks found."
+          onReset={() => { setSearchQuery(''); setDistrictFilter('all'); }}
+          showReset={false}
+        />
+      ) : (
+        <div className="task-feed">
+          {filteredTasks.map((task) => {
+            const matchingBids = bids.filter((b) => b.task_id === task.id);
 
             return (
-              <div key={task.id} className="premium-card" style={{ padding: 16, marginBottom: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+              <article key={task.id} className="task-card">
+                <div className="task-card-header">
                   <div>
-                    <div style={{ fontWeight: 700 }}>{task.title}</div>
-                    <div style={{ color: '#94a3b8', fontSize: 13 }}>{task.client_name}</div>
+                    <div className="task-card-title">{task.title}</div>
+                    <div className="task-card-meta">{task.client_name}</div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>{task.budget ? `${Number(task.budget).toLocaleString()} EGP` : 'Open budget'}</div>
+                  <div className="task-price">{task.budget ? `${Number(task.budget).toLocaleString()} EGP` : 'Open budget'}</div>
                 </div>
 
-                <div style={{ marginBottom: 12 }}>{task.description}</div>
+                <div className="task-card-body">{task.description}</div>
 
                 {role === 'specialist' ? (
                   submittedBids[task.id] ? (
-                    <div style={{ padding: 12, background: 'rgba(16,185,129,0.08)', borderRadius: 8 }}>✓ Your proposal has been registered.</div>
+                    <div className="fee-breakdown-card success-note">
+                      ✓ Your proposal has been registered.
+                    </div>
                   ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr 160px', gap: 8 }}>
-                      <input type="number" placeholder="EGP" value={bidAmounts[task.id] || ''} onChange={(e) => handleAmountChange(task.id, e.target.value)} style={{ padding: 8, borderRadius: 6 }} />
-                      <input type="text" placeholder="Short pitch" value={bidNotes[task.id] || ''} onChange={(e) => handleTextChange(task.id, e.target.value)} style={{ padding: 8, borderRadius: 6 }} />
-                      <button onClick={() => handleSubmitBid(task.id)} disabled={isSubmitting[task.id]} className="btn-primary">{isSubmitting[task.id] ? 'Committing...' : 'Send Proposal'}</button>
+                    <div className="bid-form">
+                      <label className="form-label">Your offer (EGP)</label>
+                      <input
+                        type="number"
+                        className="form-input"
+                        placeholder="e.g. 800"
+                        value={bidAmounts[task.id] || ''}
+                        onChange={(e) => handleAmountChange(task.id, e.target.value)}
+                      />
+                      <label className="form-label">Pitch your work</label>
+                      <textarea
+                        className="form-textarea"
+                        placeholder="Short pitch to stand out"
+                        value={bidNotes[task.id] || ''}
+                        onChange={(e) => handleTextChange(task.id, e.target.value)}
+                      />
+                      <button type="button" className="contact-btn" onClick={() => handleSubmitBid(task.id)} disabled={isSubmitting[task.id]}>
+                        {isSubmitting[task.id] ? 'Committing...' : 'Send Proposal'}
+                      </button>
                     </div>
                   )
                 ) : (
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Incoming Bids ({matchingBids.length})</div>
-                    {matchingBids.map(b => (
-                      <div key={b.id} style={{ display: 'flex', justifyContent: 'space-between', padding: 8, borderRadius: 6, background: '#0f172a', marginBottom: 6 }}>
-                        <div>
-                          <div style={{ fontWeight: 700 }}>{b.amount ? `${Number(b.amount).toLocaleString()} EGP` : 'Offer'}</div>
-                          <div style={{ color: '#94a3b8', fontSize: 12 }}>{b.note}</div>
-                        </div>
-                        {user?.id === task.user_id && task.status === 'open' && (
-                          <button onClick={() => { /* accept flow handled elsewhere */ alert('Accepting...'); }} className="btn-primary">Accept</button>
-                        )}
+                  <div className="proposals-block">
+                    <div className="proposal-row">
+                      <div>
+                        <h4>Incoming Bids</h4>
+                        <p className="proposal-status">{matchingBids.length} proposal{matchingBids.length === 1 ? '' : 's'} received</p>
                       </div>
-                    ))}
+                      <div className="fee-breakdown-card">
+                        <h4>Client fee preview</h4>
+                        <div className="fee-breakdown-row">
+                          <span>Platform fee</span>
+                          <strong>10%</strong>
+                        </div>
+                        <div className="fee-breakdown-row">
+                          <span>Example on 800 EGP</span>
+                          <strong>80 EGP</strong>
+                        </div>
+                        <div className="fee-breakdown-row" style={{ color: 'var(--color-text-primary)' }}>
+                          <span>Specialist payout</span>
+                          <strong>720 EGP</strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    {matchingBids.map((b) => {
+                      const amount = Number(b.amount || 0);
+                      const fee = Math.round(amount * 0.1);
+                      const payout = amount - fee;
+                      return (
+                        <div key={b.id} className="proposal-item">
+                          <div className="proposal-row">
+                            <div>
+                              <div className="proposal-price">{amount ? `${amount.toLocaleString()} EGP` : 'Offer'}</div>
+                              <div className="proposal-message">{b.note}</div>
+                            </div>
+                            <button
+                              type="button"
+                              className="contact-btn"
+                              onClick={() => handleAcceptBid(b, task)}
+                              disabled={task.status !== 'open' || accepting[b.id]}
+                            >
+                              {accepting[b.id] ? 'Accepting...' : 'Accept bid'}
+                            </button>
+                          </div>
+                          <p className="proposal-status">Estimated payout after 10% fee: {payout.toLocaleString()} EGP</p>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
-
-              </div>
+              </article>
             );
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
     </div>
   );
 }
