@@ -1,0 +1,199 @@
+/* src/index.css */
+
+/* 1. Global Reset & Typography Baseline */
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #0f172a; /* Premium deep slate canvas */
+  color: #f8fafc;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 2. Universal Layout Box Constraints (The Airbnb Rule) */
+.marketplace-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 24px;
+  box-sizing: border-box;
+}
+
+/* 3. Premium High-End Card Architecture */
+.premium-card {
+  background: #1e293b;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -4px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-bottom: 24px;
+}
+
+/* Real-Time Interactive Micro-Movements */
+.premium-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(99, 102, 241, 0.4); /* Soft indigo highlight */
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+}
+
+/* 4. Smooth Form Fields & System Inputs */
+.premium-input, .premium-textarea {
+  width: 100%;
+  padding: 14px 16px;
+  background-color: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  color: #f8fafc;
+  font-size: 15px;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+  margin-bottom: 16px;
+}
+
+.premium-input:focus, .premium-textarea:focus {
+  outline: none;
+  border-color: #6366f1; /* Brand Indigo */
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+/* 5. Solid CTA Commercial Buttons */
+.btn-primary {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: white;
+  border: none;
+  padding: 14px 28px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  opacity: 0.95;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.35);
+}
+
+.btn-secondary {
+  background: #334155;
+  color: #f8fafc;
+  border: 1px solid #475569;
+  padding: 14px 20px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: #475569;
+}
+
+/* Animation Keyframes */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ⚡ HARDWARE-ACCELERATED LAYOUT TRANSITIONS */
+.premium-card, .btn-primary, .btn-secondary {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
+  will-change: transform, opacity; /* Tells the browser to use GPU rendering */
+}
+
+.premium-card:hover {
+  transform: translateY(-2px);
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(100px) scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* 6. Premium feed empty states (search / filter no-results) */
+.feed-empty-state {
+  padding: 48px 24px;
+  text-align: center;
+  background: rgba(30, 41, 59, 0.45);
+  border: 1px dashed rgba(148, 163, 184, 0.25);
+  border-radius: 16px;
+  margin-bottom: 8px;
+}
+
+.feed-empty-state--specialists {
+  grid-column: 1 / -1;
+}
+
+.feed-empty-state-icon {
+  font-size: 36px;
+  margin-bottom: 14px;
+  line-height: 1;
+}
+
+.feed-empty-state-title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: -0.02em;
+}
+
+.feed-empty-state-description {
+  margin: 0 auto 22px;
+  max-width: 420px;
+  color: #94a3b8;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.feed-empty-state-reset {
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.feed-empty-state--tasks .feed-empty-state-reset {
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid #38bdf8;
+  color: #38bdf8;
+}
+
+.feed-empty-state--tasks .feed-empty-state-reset:hover {
+  background: rgba(56, 189, 248, 0.22);
+}
+
+.feed-empty-state--specialists .feed-empty-state-reset {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid #10b981;
+  color: #10b981;
+}
+
+.feed-empty-state--specialists .feed-empty-state-reset:hover {
+  background: rgba(16, 185, 129, 0.22);
+}
+
+.marketplace-feed-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
