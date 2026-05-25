@@ -41,6 +41,7 @@ export default function Marketplace({
   const [bidAmounts, setBidAmounts]     = useState({});
   const [bidNotes, setBidNotes]         = useState({});
   const [submitting, setSubmitting]     = useState({});
+  const [bidErrors, setBidErrors]       = useState({});
 
   // Create task form
   const [newTitle, setNewTitle]         = useState('');
@@ -90,9 +91,6 @@ export default function Marketplace({
     const note   = bidNotes[taskId];
     if (!amount || !note) { alert('Please enter a price and a message.'); return; }
     setSubmitting(p => ({ ...p, [taskId]: true }));
-    const prev = { amount, note };
-    setBidAmounts(p => ({ ...p, [taskId]: '' }));
-    setBidNotes(p => ({ ...p, [taskId]: '' }));
     try {
       const { error } = await supabase.from('bids').insert([{
         task_id: taskId, specialist_id: user.id,
@@ -100,10 +98,15 @@ export default function Marketplace({
       }]);
       if (error) throw error;
       if (syncPlatformEngineData) await syncPlatformEngineData();
+      // on success, clear inputs and any previous errors
+      setBidAmounts(p => ({ ...p, [taskId]: '' }));
+      setBidNotes(p => ({ ...p, [taskId]: '' }));
+      setBidErrors(prev => { const c = { ...prev }; delete c[taskId]; return c; });
     } catch (err) {
-      setBidAmounts(p => ({ ...p, [taskId]: prev.amount }));
-      setBidNotes(p => ({ ...p, [taskId]: prev.note }));
-      alert('Could not submit bid: ' + err.message);
+      // preserve inputs (we didn't clear them yet) and show inline error
+      const message = err?.message || 'Transaction dropped. Restoring your input layout data...';
+      setBidErrors(prev => ({ ...prev, [taskId]: message }));
+      console.error('Could not submit bid for task', taskId, err);
     } finally {
       setSubmitting(p => ({ ...p, [taskId]: false }));
     }
@@ -237,6 +240,11 @@ export default function Marketplace({
                       ) : (
                         <>
                           <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-2)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Submit a proposal</div>
+                              {bidErrors[task.id] && (
+                                <div className="fee-breakdown-card" style={{ borderColor: 'rgba(239,68,68,0.12)', background: 'rgba(239,68,68,0.04)', color: 'var(--danger)', marginBottom: 12 }}>
+                                  {bidErrors[task.id]}
+                                </div>
+                              )}
                           <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 12, marginBottom: 12 }}>
                             <input
                               type="number"
