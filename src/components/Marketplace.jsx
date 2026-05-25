@@ -87,14 +87,17 @@ export default function Marketplace({
   };
 
   const handleSubmitBid = async (taskId) => {
-    const amount = bidAmounts[taskId];
-    const note   = bidNotes[taskId];
-    if (!amount || !note) { alert('Please enter a price and a message.'); return; }
+    const bidAmount = bidAmounts[taskId];
+    const proposalText = bidNotes[taskId];
+    if (!bidAmount || !proposalText) { alert('Please enter a price and a proposal pitch.'); return; }
     setSubmitting(p => ({ ...p, [taskId]: true }));
     try {
       const { error } = await supabase.from('bids').insert([{
-        task_id: taskId, specialist_id: user.id,
-        amount: parseFloat(amount), note, status: 'pending',
+        task_id: taskId,
+        specialist_id: user.id,
+        proposed_price: parseFloat(bidAmount),
+        pitch: proposalText,
+        status: 'pending',
       }]);
       if (error) throw error;
       if (syncPlatformEngineData) await syncPlatformEngineData();
@@ -114,7 +117,7 @@ export default function Marketplace({
 
   const handleAcceptBid = async (task, bid) => {
     try {
-      const gross = Number(bid.amount);
+      const gross = Number(bid.proposed_price);
       const fee   = gross * 0.1;
       const net   = gross - fee;
       const { error: bErr } = await supabase.from('bids').update({ status: 'accepted', platform_fee_amount: fee, provider_net_payout: net }).eq('id', bid.id);
@@ -292,12 +295,12 @@ export default function Marketplace({
                                   {bid.profiles?.full_name || 'Specialist'}
                                 </div>
                                 <p style={{ fontSize: 13, color: 'var(--text-2)', margin: '4px 0 0', lineHeight: 1.5 }}>
-                                  "{bid.note || bid.proposal_text || 'No message provided.'}"
+                                  "{bid.pitch || bid.note || bid.proposal_text || 'No message provided.'}"
                                 </p>
                               </div>
                               <div style={{ textAlign: 'right', flexShrink: 0 }}>
                                 <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600, color: 'var(--green)', marginBottom: 8 }}>
-                                  {Number(bid.amount ?? 0).toLocaleString()} EGP
+                                  {Number(bid.proposed_price ?? 0).toLocaleString()} EGP
                                 </div>
                                 {task.status === 'open' && (
                                   <button
