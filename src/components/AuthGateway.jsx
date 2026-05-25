@@ -2,95 +2,87 @@ import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 
 export default function AuthGateway({ onAuthSuccess }) {
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
+  const [isSignUp, setIsSignUp]     = useState(false);
+  const [email, setEmail]           = useState('');
+  const [password, setPassword]     = useState('');
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState('');
 
-  const handleAuthentication = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setErrorMessage('');
-
+    setError('');
     try {
       if (isSignUp) {
         const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
-        alert('🎯 Registration successful! If email verification is enabled, please check your inbox.');
         if (data?.user) onAuthSuccess(data.user);
+        else setError('Check your email to confirm your account.');
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         if (data?.user) onAuthSuccess(data.user);
       }
-    } catch (error) {
-      setErrorMessage(error.message);
+    } catch (err) {
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: '#0b0f19', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '20px' }}>
-      <div className="premium-card" style={{ maxWidth: '420px', width: '100%', padding: '40px', background: 'rgba(30, 41, 59, 0.15)', border: '1px solid #233149', borderRadius: '16px', backdropFilter: 'blur(16px)', boxShadow: '0 20px 40px rgba(0,0,0,0.7)' }}>
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <div style={{ fontSize: '32px', marginBottom: '8px' }}>⚡</div>
-          <h2 style={{ margin: '0 0 6px 0', fontSize: '24px', fontWeight: '800', color: '#f8fafc', letterSpacing: '-0.5px' }}>
-            {isSignUp ? 'Create Your Account' : 'Welcome to CatchUp'}
-          </h2>
-          <p style={{ margin: 0, color: '#94a3b8', fontSize: '14px' }}>
-            {isSignUp ? 'Join the professional regional ecosystem' : 'Sign in to monitor your workspace parameters'}
-          </p>
-        </div>
+    <div className="auth-screen">
+      <div className="auth-card">
+        <div className="auth-logo">⚡</div>
 
-        {errorMessage && (
-          <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#fca5a5', padding: '12px', borderRadius: '8px', fontSize: '13px', marginBottom: '20px', textAlign: 'center' }}>
-            ⚠️ {errorMessage}
-          </div>
-        )}
+        <h1 className="auth-title">
+          {isSignUp ? 'Create your account' : 'Welcome back'}
+        </h1>
+        <p className="auth-subtitle">
+          {isSignUp
+            ? 'Join the professional services network in Menoufia'
+            : 'Sign in to your CatchUp account'}
+        </p>
 
-        <form onSubmit={handleAuthentication} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div>
-            <label style={{ display: 'block', color: '#cbd5e1', fontSize: '12px', fontWeight: '600', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Email Address</label>
-            <input
-              type="email"
-              required
-              placeholder="name@domain.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              style={{ width: '100%', padding: '12px 16px', background: '#0b0f19', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
-            />
-          </div>
-          <div>
-            <label style={{ display: 'block', color: '#cbd5e1', fontSize: '12px', fontWeight: '600', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Password</label>
-            <input
-              type="password"
-              required
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              style={{ width: '100%', padding: '12px 16px', background: '#0b0f19', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
-            />
-          </div>
+        {error && <div className="auth-error">⚠️ {error}</div>}
+
+        <form onSubmit={handleSubmit}>
+          <label>Email address</label>
+          <input
+            type="email"
+            required
+            placeholder="your@email.com"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            autoComplete="email"
+          />
+
+          <label>Password</label>
+          <input
+            type="password"
+            required
+            placeholder="••••••••"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            autoComplete={isSignUp ? 'new-password' : 'current-password'}
+          />
+
           <button
             type="submit"
             disabled={loading}
-            className="btn-primary"
-            style={{ width: '100%', padding: '14px', fontSize: '14px', fontWeight: '700', marginTop: '8px', background: '#38bdf8', color: '#0f172a' }}
+            className="btn btn-primary btn-full btn-lg"
+            style={{ marginTop: 8 }}
           >
-            {loading ? 'Processing System Credentials...' : isSignUp ? 'Register Account' : 'Secure Login'}
+            {loading
+              ? 'Please wait…'
+              : isSignUp ? 'Create account' : 'Sign in'}
           </button>
         </form>
 
-        <div style={{ marginTop: '24px', textAlign: 'center', fontSize: '13px', color: '#64748b' }}>
-          {isSignUp ? 'Already have an profile registry?' : 'New to our regional platform node?'}{' '}
-          <button
-            type="button"
-            onClick={() => { setIsSignUp(!isSignUp); setErrorMessage(''); }}
-            style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', fontWeight: '600', padding: 0 }}
-          >
-            {isSignUp ? 'Sign In Here' : 'Create an Account'}
+        <div className="auth-toggle">
+          {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
+          <button onClick={() => { setIsSignUp(v => !v); setError(''); }}>
+            {isSignUp ? 'Sign in' : 'Sign up'}
           </button>
         </div>
       </div>

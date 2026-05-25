@@ -129,7 +129,7 @@ export default function ProjectRoom({ user, activeRoom: activeRoomProp }) {
       .insert([messagePayload]);
 
     if (error) {
-      alert("Message transmission error: " + error.message);
+      alert("Message failed: " + error.message);
     }
   };
 
@@ -165,7 +165,7 @@ export default function ProjectRoom({ user, activeRoom: activeRoomProp }) {
         '⚖️ Dispute case officially opened. Escrow funds locked; an administrator will review this chat stream.'
       );
     } catch (err) {
-      alert(`Dispute filing error: ${err.message}`);
+      alert(`Could not file dispute: ${err.message}`);
     }
   };
 
@@ -205,7 +205,7 @@ export default function ProjectRoom({ user, activeRoom: activeRoomProp }) {
       window.location.reload(); // Refresh local cache arrays cleanly
 
     } catch (err) {
-      alert("Error logging review matrix: " + err.message);
+      alert("Error submitting review: " + err.message);
     }
   };
 
@@ -226,23 +226,23 @@ export default function ProjectRoom({ user, activeRoom: activeRoomProp }) {
           <style>
             body { font-family: 'Helvetica Neue', Arial, sans-serif; padding: 40px; color: #1e293b; background: #ffffff; }
             .header { border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
-            .title { font-size: 24px; font-weight: 800; text-transform: uppercase; letter-spacing: -0.5px; color: #4f46e5; }
+            .title { font-size: 24px; font-weight: 800; text-transform: uppercase; letter-spacing: -0.5px; color: var(--gold); }
             .badge { background: #d1fae5; color: #065f46; padding: 6px 12px; border-radius: 9999px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
             .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 40px; }
-            .meta-block h4 { margin: 0 0 6px 0; color: #64748b; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+            .meta-block h4 { margin: 0 0 6px 0; color: var(--text-3); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
             .meta-block p { margin: 0; font-size: 15px; font-weight: 600; color: #0f172a; }
             .invoice-table { width: 100%; border-collapse: collapse; margin-bottom: 50px; }
-            .invoice-table th { background: #f8fafc; text-align: left; padding: 14px; font-size: 13px; color: #64748b; text-transform: uppercase; font-weight: 700; border-bottom: 1px solid #e2e8f0; }
+            .invoice-table th { background: var(--text); text-align: left; padding: 14px; font-size: 13px; color: var(--text-3); text-transform: uppercase; font-weight: 700; border-bottom: 1px solid #e2e8f0; }
             .invoice-table td { padding: 16px; font-size: 14px; border-bottom: 1px solid #f1f5f9; }
-            .total-row { text-align: right; font-size: 18px; font-weight: 800; color: #10b981; border-top: 2px solid #e2e8f0; padding-top: 16px; }
-            .footer { font-size: 11px; color: #94a3b8; text-align: center; margin-top: 100px; border-top: 1px solid #f1f5f9; padding-top: 20px; }
+            .total-row { text-align: right; font-size: 18px; font-weight: 800; color: var(--green); border-top: 2px solid #e2e8f0; padding-top: 16px; }
+            .footer { font-size: 11px; color: var(--text-2); text-align: center; margin-top: 100px; border-top: 1px solid #f1f5f9; padding-top: 20px; }
           </style>
         </head>
         <body>
           <div class="header">
             <div>
               <div class="title">CATCHUP ESCROW SYSTEM</div>
-              <span style="font-size: 12px; color: #64748b;">Receipt Hash Reference: ${room.id}</span>
+              <span style="font-size: 12px; color: var(--text-3);">Receipt Hash Reference: ${room.id}</span>
             </div>
             <div class="badge">Paid & Settled</div>
           </div>
@@ -295,7 +295,7 @@ export default function ProjectRoom({ user, activeRoom: activeRoomProp }) {
   };
 
   if (isLoading) {
-    return <div style={{ color: '#38bdf8', padding: '40px', textAlign: 'center' }}>⏳ Loading private workspaces...</div>;
+    return <div style={{ color: 'var(--gold)', padding: '40px', textAlign: 'center' }}>⏳ Loading private workspaces...</div>;
   }
 
   return (
@@ -303,9 +303,9 @@ export default function ProjectRoom({ user, activeRoom: activeRoomProp }) {
       
       {/* LEFT SIDEBAR: ACTIVE ESCROW CONTRACT ROOMS LIST */}
       <div className="premium-card" style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto' }}>
-        <h3 style={{ fontSize: '15px', color: '#94a3b8', margin: '0 0 12px 0', textTransform: 'uppercase', fontWeight: '700' }}>🛡️ Active Deal Channels</h3>
+        <h3 style={{ fontSize: '15px', color: 'var(--text-2)', margin: '0 0 12px 0', textTransform: 'uppercase', fontWeight: '700' }}>🛡️ Active Deal Channels</h3>
         {rooms.length === 0 ? (
-          <p style={{ color: '#64748b', fontSize: '13px' }}>No finalized contracts open yet.</p>
+          <p style={{ color: 'var(--text-3)', fontSize: '13px' }}>No finalized contracts open yet.</p>
         ) : (
           rooms.map(room => (
             <div 
@@ -313,13 +313,13 @@ export default function ProjectRoom({ user, activeRoom: activeRoomProp }) {
               onClick={() => setActiveRoom(room)}
               style={{
                 padding: '14px', borderRadius: '8px', cursor: 'pointer',
-                background: activeRoom?.id === room.id ? 'rgba(56, 189, 248, 0.12)' : '#0f172a',
-                border: activeRoom?.id === room.id ? '1px solid #38bdf8' : '1px solid #233149',
+                background: activeRoom?.id === room.id ? 'rgba(56, 189, 248, 0.12)' : 'var(--bg-soft)',
+                border: activeRoom?.id === room.id ? '1px solid var(--gold)' : '1px solid #233149',
                 transition: 'all 0.2s'
               }}
             >
-              <div style={{ fontWeight: '600', fontSize: '14px', color: '#f8fafc', marginBottom: '4px' }}>{room.tasks?.title || "Marketplace Deal"}</div>
-              <div style={{ fontSize: '12px', color: '#10b981', fontWeight: '600' }}>💰 Budget: {room.tasks?.budget?.toLocaleString()} EGP</div>
+              <div style={{ fontWeight: '600', fontSize: '14px', color: 'var(--text)', marginBottom: '4px' }}>{room.tasks?.title || "Marketplace Deal"}</div>
+              <div style={{ fontSize: '12px', color: 'var(--green)', fontWeight: '600' }}>💰 Budget: {room.tasks?.budget?.toLocaleString()} EGP</div>
               {room.status === 'disputed' && (
                 <div style={{ fontSize: '11px', color: '#f87171', fontWeight: '600', marginTop: '6px' }}>⚖️ Under arbitration</div>
               )}
@@ -335,18 +335,18 @@ export default function ProjectRoom({ user, activeRoom: activeRoomProp }) {
             {/* Header Area banner */}
             <div style={{ padding: '20px 24px', borderBottom: '1px solid #233149', background: 'rgba(15, 23, 42, 0.6)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h2 style={{ margin: '0 0 4px 0', fontSize: '18px', color: '#f8fafc' }}>{activeRoom.tasks?.title}</h2>
-                <span style={{ color: '#94a3b8', fontSize: '12px' }}>Workspace Hash: {activeRoom.id}</span>
+                <h2 style={{ margin: '0 0 4px 0', fontSize: '18px', color: 'var(--text)' }}>{activeRoom.tasks?.title}</h2>
+                <span style={{ color: 'var(--text-2)', fontSize: '12px' }}>Workspace Hash: {activeRoom.id}</span>
                 {(activeRoom.status === 'active' || activeRoom.status === 'completed') && specialistProfile && (
                   <div style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '12px', fontSize: '12px' }}>
                     <span style={{ color: '#a7f3d0', fontWeight: '600' }}>
                       👤 {specialistProfile.full_name || 'Verified Specialist'}
                     </span>
                     {specialistProfile.phone_number && (
-                      <span style={{ color: '#38bdf8' }}>📞 {specialistProfile.phone_number}</span>
+                      <span style={{ color: 'var(--gold)' }}>📞 {specialistProfile.phone_number}</span>
                     )}
                     {specialistProfile.email_address && (
-                      <span style={{ color: '#38bdf8' }}>✉️ {specialistProfile.email_address}</span>
+                      <span style={{ color: 'var(--gold)' }}>✉️ {specialistProfile.email_address}</span>
                     )}
                   </div>
                 )}
@@ -362,8 +362,8 @@ export default function ProjectRoom({ user, activeRoom: activeRoomProp }) {
                       onClick={handleInitiateDispute}
                       style={{
                         background: 'rgba(239, 68, 68, 0.1)',
-                        border: '1px solid #ef4444',
-                        color: '#ef4444',
+                        border: '1px solid var(--red)',
+                        color: 'var(--red)',
                         padding: '10px 14px',
                         fontSize: '13px',
                         borderRadius: '8px',
@@ -381,8 +381,8 @@ export default function ProjectRoom({ user, activeRoom: activeRoomProp }) {
                     onClick={() => handleExportReceipt(activeRoom)}
                     style={{ 
                       background: 'rgba(56, 189, 248, 0.1)', 
-                      border: '1px solid #38bdf8',
-                      color: '#38bdf8',
+                      border: '1px solid var(--gold)',
+                      color: 'var(--gold)',
                       padding: '10px 18px', 
                       fontSize: '13px', 
                       fontWeight: '700',
@@ -400,7 +400,7 @@ export default function ProjectRoom({ user, activeRoom: activeRoomProp }) {
                   <button 
                     onClick={() => setShowReviewModal(true)}
                     className="btn-primary" 
-                    style={{ background: '#10b981', padding: '10px 18px', fontSize: '13px', fontWeight: '700' }}
+                    style={{ background: 'var(--green)', padding: '10px 18px', fontSize: '13px', fontWeight: '700' }}
                   >
                     Complete Contract & Review
                   </button>
@@ -413,7 +413,7 @@ export default function ProjectRoom({ user, activeRoom: activeRoomProp }) {
               <div
                 style={{
                   background: 'rgba(239, 68, 68, 0.15)',
-                  border: '1px solid #ef4444',
+                  border: '1px solid var(--red)',
                   padding: '12px',
                   color: '#fca5a5',
                   fontSize: '13px',
@@ -461,9 +461,9 @@ export default function ProjectRoom({ user, activeRoom: activeRoomProp }) {
                       justifyContent: 'center',
                       fontSize: '11px',
                       fontWeight: '700',
-                      background: phase.done ? '#10b981' : phase.active ? '#38bdf8' : '#1e293b',
-                      color: phase.done || phase.active ? '#0f172a' : '#64748b',
-                      border: phase.active ? '2px solid #38bdf8' : '2px solid transparent',
+                      background: phase.done ? 'var(--green)' : phase.active ? 'var(--gold)' : 'var(--surface-2)',
+                      color: phase.done || phase.active ? 'var(--bg-soft)' : 'var(--text-3)',
+                      border: phase.active ? '2px solid var(--gold)' : '2px solid transparent',
                       transition: 'all 0.3s'
                     }}>
                       {phase.done ? '✓' : phase.step}
@@ -471,7 +471,7 @@ export default function ProjectRoom({ user, activeRoom: activeRoomProp }) {
                     <span style={{ 
                       fontSize: '13px', 
                       fontWeight: '600', 
-                      color: phase.done ? '#f8fafc' : phase.active ? '#38bdf8' : '#64748b' 
+                      color: phase.done ? 'var(--text)' : phase.active ? 'var(--gold)' : 'var(--text-3)' 
                     }}>
                       {phase.label}
                     </span>
@@ -480,7 +480,7 @@ export default function ProjectRoom({ user, activeRoom: activeRoomProp }) {
                     <div style={{ 
                       flex: 1, 
                       height: '2px', 
-                      background: phase.done ? '#10b981' : '#233149',
+                      background: phase.done ? 'var(--green)' : 'var(--border)',
                       transition: 'all 0.3s' 
                     }} />
                   )}
@@ -489,14 +489,14 @@ export default function ProjectRoom({ user, activeRoom: activeRoomProp }) {
             </div>
 
             {/* Conversation text area container */}
-            <div style={{ flex: 1, padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', background: '#0b0f19' }}>
+            <div style={{ flex: 1, padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', background: 'var(--bg)' }}>
               {messages.map((msg, index) => {
                 const isMe = msg.sender_id === user.id;
                 return (
                   <div key={msg.id || index} style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start' }}>
                     <div style={{
                       maxWidth: '60%', padding: '12px 16px', borderRadius: '12px', fontSize: '14px', lineHeight: '1.4',
-                      background: isMe ? '#4f46e5' : '#1e293b',
+                      background: isMe ? 'var(--gold)' : 'var(--surface-2)',
                       color: isMe ? '#ffffff' : '#cbd5e1',
                       border: isMe ? 'none' : '1px solid #334155',
                       borderBottomRightRadius: isMe ? '2px' : '12px',
@@ -561,10 +561,10 @@ export default function ProjectRoom({ user, activeRoom: activeRoomProp }) {
                 style={{
                   flex: 1,
                   padding: '14px 16px',
-                  background: '#0f172a',
+                  background: 'var(--bg-soft)',
                   border: '1px solid #334155',
                   borderRadius: '8px',
-                  color: '#f8fafc',
+                  color: 'var(--text)',
                   outline: 'none',
                   opacity: activeRoom.status === 'disputed' ? 0.6 : 1,
                 }}
@@ -580,7 +580,7 @@ export default function ProjectRoom({ user, activeRoom: activeRoomProp }) {
             </form>
           </>
         ) : (
-          <div style={{ display: 'flex', flex1: 1, justifyContent: 'center', alignItems: 'center', color: '#64748b', height: '100%' }}>
+          <div style={{ display: 'flex', flex1: 1, justifyContent: 'center', alignItems: 'center', color: 'var(--text-3)', height: '100%' }}>
             Select an active contract from the sidebar panel to begin secure localized sync operations.
           </div>
         )}
@@ -589,15 +589,15 @@ export default function ProjectRoom({ user, activeRoom: activeRoomProp }) {
       {/* 🌟 OVERLAY TRANSACTIONS COMPLETION MODAL */}
       {showReviewModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '20px' }}>
-          <div className="premium-card" style={{ maxWidth: '500px', width: '100%', padding: '32px', background: '#0f172a', border: '1px solid #334155' }}>
-            <h2 style={{ margin: '0 0 8px 0', fontSize: '20px', color: '#f8fafc' }}>Finalize Marketplace Assignment</h2>
-            <p style={{ margin: '0 0 24px 0', color: '#94a3b8', fontSize: '14px' }}>Rate the service quality of the specialist to seal the operational transaction block.</p>
+          <div className="premium-card" style={{ maxWidth: '500px', width: '100%', padding: '32px', background: 'var(--bg-soft)', border: '1px solid #334155' }}>
+            <h2 style={{ margin: '0 0 8px 0', fontSize: '20px', color: 'var(--text)' }}>Finalize Marketplace Assignment</h2>
+            <p style={{ margin: '0 0 24px 0', color: 'var(--text-2)', fontSize: '14px' }}>Rate the service quality of the specialist to seal the operational transaction block.</p>
 
             <label style={{ display: 'block', color: '#cbd5e1', fontSize: '13px', fontWeight: '600', marginBottom: '8px' }}>Performance Score Matrix</label>
             <select 
               value={ratingScore} 
               onChange={(e) => setRatingScore(e.target.value)}
-              style={{ width: '100%', padding: '12px', background: '#0b0f19', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc', marginBottom: '20px', outline: 'none' }}
+              style={{ width: '100%', padding: '12px', background: 'var(--bg)', border: '1px solid #334155', borderRadius: '8px', color: 'var(--text)', marginBottom: '20px', outline: 'none' }}
             >
               <option value="5">⭐⭐⭐⭐⭐ Excellent Delivery (5/5)</option>
               <option value="4">⭐⭐⭐⭐ Satisfactory Project (4/5)</option>
@@ -612,12 +612,12 @@ export default function ProjectRoom({ user, activeRoom: activeRoomProp }) {
               placeholder="Share performance insights regarding response velocity, technical modification capability, and delivery..."
               value={feedbackText}
               onChange={(e) => setFeedbackText(e.target.value)}
-              style={{ width: '100%', padding: '12px', background: '#0b0f19', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc', marginBottom: '24px', outline: 'none', resize: 'none', fontFamily: 'sans-serif', fontSize: '14px', boxSizing: 'border-box' }}
+              style={{ width: '100%', padding: '12px', background: 'var(--bg)', border: '1px solid #334155', borderRadius: '8px', color: 'var(--text)', marginBottom: '24px', outline: 'none', resize: 'none', fontFamily: 'sans-serif', fontSize: '14px', boxSizing: 'border-box' }}
             />
 
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowReviewModal(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}>Cancel</button>
-              <button onClick={handleFinalizeProject} className="btn-primary" style={{ background: '#10b981', padding: '12px 24px' }}>Submit & Lock Deal</button>
+              <button onClick={() => setShowReviewModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-2)', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}>Cancel</button>
+              <button onClick={handleFinalizeProject} className="btn-primary" style={{ background: 'var(--green)', padding: '12px 24px' }}>Submit & Lock Deal</button>
             </div>
           </div>
         </div>

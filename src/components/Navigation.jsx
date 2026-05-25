@@ -1,88 +1,83 @@
 import React, { useState } from 'react';
 
-const navItems = [
-  { id: 'marketplace', label: 'Browse', icon: '📌' },
-  { id: 'messages', label: 'Workspace', icon: '💬' },
-  { id: 'analytics', label: 'Insights', icon: '📊' },
-  { id: 'profile', label: 'Profile', icon: '👤' },
-];
-
 export default function Navigation({ user, role, setRole, unreadCount = 0, setActiveTab, activeTab, onSignOut }) {
   const [showDropdown, setShowDropdown] = useState(false);
 
+  const links = [
+    { id: 'marketplace', label: 'Browse' },
+    { id: 'messages',    label: 'Workspace', badge: unreadCount },
+    { id: 'analytics',   label: 'Insights' },
+    { id: 'telemetry',   label: 'System' },
+  ];
+
   return (
-    <>
-      <nav className="top-nav-bar">
-        <div className="top-nav-left">
-          <button type="button" className="top-nav-item" onClick={() => setActiveTab('marketplace')}>
-            <span aria-hidden="true">⚡</span> <span style={{ fontWeight: 700 }}>CatchUp</span>
-          </button>
-          <div className="top-nav-links">
-            <button type="button" className={`top-nav-item ${activeTab === 'marketplace' ? 'active' : ''}`} onClick={() => setActiveTab('marketplace')}>
-              Browse Feed
-            </button>
-            <button type="button" className={`top-nav-item ${activeTab === 'analytics' ? 'active' : ''}`} onClick={() => setActiveTab('analytics')}>
-              Insights Ledger
-            </button>
-            <button type="button" className={`top-nav-item ${activeTab === 'telemetry' ? 'active' : ''}`} onClick={() => setActiveTab('telemetry')}>
-              System Health
-            </button>
-            <button type="button" className={`top-nav-item ${activeTab === 'messages' ? 'active' : ''}`} onClick={() => setActiveTab('messages')}>
-              Workspace
-              {unreadCount > 0 && <span className="notification-badge">{unreadCount}</span>}
-            </button>
-          </div>
-        </div>
+    <nav className="main-nav">
+      <div className="nav-logo" onClick={() => setActiveTab('marketplace')}>
+        <div className="nav-logo-icon">⚡</div>
+        <span className="nav-logo-text">CatchUp</span>
+      </div>
 
-        <div className="top-nav-actions">
+      <div className="nav-links">
+        {links.map(l => (
           <button
-            type="button"
-            className="action-btn"
-            style={{ background: role === 'client' ? 'var(--success)' : 'var(--accent)', color: 'var(--bg)' }}
-            onClick={() => setRole(role === 'client' ? 'specialist' : 'client')}
+            key={l.id}
+            className={`nav-link${activeTab === l.id ? ' active' : ''}`}
+            onClick={() => setActiveTab(l.id)}
           >
-            Switch to {role === 'client' ? 'Specialist' : 'Client'} Mode
+            {l.label}
+            {l.badge > 0 && <span className="nav-badge">{l.badge}</span>}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button
+          onClick={() => setRole(role === 'client' ? 'specialist' : 'client')}
+          className="btn btn-sm"
+          style={{
+            background: role === 'client' ? 'var(--blue-dim)' : 'var(--green-dim)',
+            color: role === 'client' ? 'var(--blue)' : 'var(--green)',
+            border: `1px solid ${role === 'client' ? 'var(--blue-border)' : 'var(--green-border)'}`,
+          }}
+        >
+          {role === 'client' ? '💼 Client' : '🛠️ Specialist'}
+        </button>
+
+        <div style={{ position: 'relative' }}>
+          <button
+            className="nav-avatar"
+            onClick={() => setShowDropdown(v => !v)}
+          >
+            {user?.email?.[0]?.toUpperCase() ?? 'U'}
           </button>
 
-          <div style={{ position: 'relative' }}>
-            <button
-              type="button"
-              className="btn-outline"
-              style={{ width: '38px', height: '38px', borderRadius: '50%', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              onClick={() => setShowDropdown(!showDropdown)}
-            >
-              {user?.name ? user.name[0].toUpperCase() : 'U'}
-            </button>
-
-            {showDropdown && (
-              <div className="profile-sidebar-card" style={{ position: 'absolute', right: 0, top: '48px', width: 220, padding: 0, boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25)' }}>
-                <button type="button" className="top-nav-item" style={{ width: '100%', textAlign: 'left', padding: '14px 16px', borderRadius: 0, borderBottom: '1px solid var(--border)' }} onClick={() => { setActiveTab('profile'); setShowDropdown(false); }}>
-                  👤 Profile Settings
+          {showDropdown && (
+            <>
+              <div
+                style={{ position: 'fixed', inset: 0, zIndex: 299 }}
+                onClick={() => setShowDropdown(false)}
+              />
+              <div className="nav-dropdown">
+                <div style={{ padding: '8px 12px 10px', borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 2 }}>Signed in as</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', wordBreak: 'break-all' }}>{user?.email}</div>
+                  <div style={{ marginTop: 6 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: role === 'client' ? 'var(--blue)' : 'var(--green)' }}>
+                      {role}
+                    </span>
+                  </div>
+                </div>
+                <button className="nav-dropdown-item" onClick={() => { setActiveTab('profile'); setShowDropdown(false); }}>
+                  👤 Profile settings
                 </button>
-                <button type="button" className="top-nav-item" style={{ width: '100%', textAlign: 'left', padding: '14px 16px', borderRadius: 0, color: 'var(--danger)' }} onClick={() => { setShowDropdown(false); onSignOut?.(); }}>
-                  🚪 Sign Out
+                <button className="nav-dropdown-item danger" onClick={() => { setShowDropdown(false); onSignOut?.(); }}>
+                  Sign out
                 </button>
               </div>
-            )}
-          </div>
-        </div>
-      </nav>
-
-      <div className="mobile-nav-bar">
-        <div className="mobile-nav-grid">
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`mobile-nav-item ${activeTab === item.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(item.id)}
-            >
-              <span aria-hidden="true" style={{ fontSize: 18 }}>{item.icon}</span>
-              <span>{item.label}</span>
-            </button>
-          ))}
+            </>
+          )}
         </div>
       </div>
-    </>
+    </nav>
   );
 }
