@@ -52,10 +52,12 @@ CREATE TABLE IF NOT EXISTS tasks (
   budget numeric,
   category text,
   district_tag text,
+  specialist_id uuid,
   status text NOT NULL DEFAULT 'open',
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
+  FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE,
+  FOREIGN KEY (specialist_id) REFERENCES profiles(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS bids (
