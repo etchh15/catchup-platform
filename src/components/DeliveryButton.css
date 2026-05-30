@@ -1,0 +1,155 @@
+.btn-mark-delivered {
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--blue);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  margin-bottom: 12px;
+}
+
+.btn-mark-delivered:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.btn-mark-delivered:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.delivery-status {
+  padding: 12px 16px;
+  background: #f0f8f0;
+  border-left: 4px solid var(--green);
+  border-radius: 6px;
+  font-weight: 600;
+  color: var(--green);
+  margin-bottom: 8px;
+}
+
+.delivery-timestamp {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding-left: 16px;
+}
+
+.delivery-confirm-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 999;
+  padding: 20px;
+}
+
+.delivery-confirm-card {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 500px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.delivery-confirm-card h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 8px 0;
+}
+
+.delivery-confirm-card p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0 0 16px 0;
+  line-height: 1.5;
+}
+
+.delivery-message {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 14px;
+  resize: vertical;
+  margin-bottom: 16px;
+}
+
+.delivery-message:disabled {
+  background: var(--bg-soft);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.delivery-confirm-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.btn-cancel {
+  padding: 10px 20px;
+  background: var(--bg-soft);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-cancel:hover:not(:disabled) {
+  background: var(--border);
+}
+
+.btn-cancel:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-confirm-delivery {
+  padding: 10px 20px;
+  background: var(--blue);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn-confirm-delivery:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.btn-confirm-delivery:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.delivery-button-done {
+  padding: 12px 16px;
+  background: #f0f8f0;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 600px) {
+  .delivery-confirm-modal {
+    padding: 12px;
+  }
+
+  .delivery-confirm-card {
+    padding: 16px;
+  }
+}

@@ -1,11 +1,12 @@
 import React, { useMemo } from 'react';
-import { formatCurrency, formatDate, STATUS_BADGE_MAP } from '../utils/statusHelpers';
+import { formatCurrency, STATUS_BADGE_MAP } from '../utils/statusHelpers';
 
-export default function AnalyticsLedger({ tasks = [], bids = [], user, role }) {
+export default function AnalyticsLedger({ tasks = [], bids = [] }) {
   // Derived metrics
   const metrics = useMemo(() => {
     const totalVolume = tasks
-      .filter(t => t.budget)
+      .filter(t => (t.status === 'open' || t.status === 'active'))
+      .filter(t => t.budget !== null && t.budget !== undefined)
       .reduce((sum, t) => sum + parseFloat(t.budget), 0);
 
     const openTasks = tasks.filter(t => t.status === 'open').length;
@@ -36,7 +37,7 @@ export default function AnalyticsLedger({ tasks = [], bids = [], user, role }) {
           {
             label: 'Total pipeline value',
             value: formatCurrency(metrics.totalVolume),
-            sub: 'All open and active tasks',
+            sub: 'Open and active tasks',
           },
           {
             label: 'Open jobs',
@@ -125,7 +126,7 @@ export default function AnalyticsLedger({ tasks = [], bids = [], user, role }) {
                         fontWeight: 600,
                       }}
                     >
-                      {t.budget ? formatCurrency(t.budget) : '—'}
+                      {t.budget !== null && t.budget !== undefined ? formatCurrency(t.budget) : '—'}
                     </td>
                     <td style={{ padding: '13px 10px' }}>
                       <span className={`badge ${STATUS_BADGE_MAP[t.status] || 'badge-muted'}`}>

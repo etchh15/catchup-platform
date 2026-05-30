@@ -102,6 +102,10 @@ CREATE TABLE IF NOT EXISTS workspace_rooms (
   FOREIGN KEY (dispute_initiated_by) REFERENCES profiles(id) ON DELETE SET NULL
 );
 
+-- Ensure only one room per task+participants
+CREATE UNIQUE INDEX IF NOT EXISTS workspace_rooms_unique_participants
+  ON workspace_rooms (task_id, client_id, specialist_id);
+
 CREATE TABLE IF NOT EXISTS workspace_messages (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   room_id uuid NOT NULL,
@@ -140,81 +144,118 @@ ALTER TABLE reviews ENABLE ROW LEVEL SECURITY;
 
 -- 3) Policies
 -- Profiles: public specialists and owner access
-CREATE POLICY IF NOT EXISTS "Public read registered specialists" ON profiles
+DROP POLICY IF EXISTS "Public read registered specialists" ON profiles;
+CREATE POLICY "Public read registered specialists" ON profiles
   FOR SELECT USING (role = 'specialist');
 
-CREATE POLICY IF NOT EXISTS "Authenticated read own profile" ON profiles
+DROP POLICY IF EXISTS "Authenticated read own profile" ON profiles;
+CREATE POLICY "Authenticated read own profile" ON profiles
   FOR SELECT USING (auth.uid() = id);
 
-CREATE POLICY IF NOT EXISTS "Authenticated insert own profile" ON profiles
+DROP POLICY IF EXISTS "Authenticated insert own profile" ON profiles;
+CREATE POLICY "Authenticated insert own profile" ON profiles
   FOR INSERT WITH CHECK (auth.uid() = id);
 
-CREATE POLICY IF NOT EXISTS "Authenticated update own profile" ON profiles
+DROP POLICY IF EXISTS "Authenticated update own profile" ON profiles;
+CREATE POLICY "Authenticated update own profile" ON profiles
   FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 
 -- Clients and specialists: owner updates only
-CREATE POLICY IF NOT EXISTS "Authenticated manage own client row" ON clients
+DROP POLICY IF EXISTS "Authenticated manage own client row" ON clients;
+CREATE POLICY "Authenticated manage own client row" ON clients
   FOR ALL USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 
-CREATE POLICY IF NOT EXISTS "Authenticated manage own specialist row" ON specialists
+DROP POLICY IF EXISTS "Authenticated manage own specialist row" ON specialists;
+CREATE POLICY "Authenticated manage own specialist row" ON specialists
   FOR ALL USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 
 -- Tasks: anyone can read, authenticated user can create / manage own tasks
-CREATE POLICY IF NOT EXISTS "Public read tasks" ON tasks
+DROP POLICY IF EXISTS "Public read tasks" ON tasks;
+CREATE POLICY "Public read tasks" ON tasks
   FOR SELECT USING (true);
 
-CREATE POLICY IF NOT EXISTS "Authenticated insert own task" ON tasks
+DROP POLICY IF EXISTS "Authenticated insert own task" ON tasks;
+CREATE POLICY "Authenticated insert own task" ON tasks
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY IF NOT EXISTS "Authenticated update own task" ON tasks
+DROP POLICY IF EXISTS "Authenticated update own task" ON tasks;
+CREATE POLICY "Authenticated update own task" ON tasks
   FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY IF NOT EXISTS "Authenticated delete own task" ON tasks
+DROP POLICY IF EXISTS "Authenticated delete own task" ON tasks;
+CREATE POLICY "Authenticated delete own task" ON tasks
   FOR DELETE USING (auth.uid() = user_id);
 
 -- Bids: public read, specialists can write their own bids
-CREATE POLICY IF NOT EXISTS "Public read bids" ON bids
+DROP POLICY IF EXISTS "Public read bids" ON bids;
+CREATE POLICY "Public read bids" ON bids
   FOR SELECT USING (true);
 
-CREATE POLICY IF NOT EXISTS "Authenticated insert own bid" ON bids
+DROP POLICY IF EXISTS "Authenticated insert own bid" ON bids;
+CREATE POLICY "Authenticated insert own bid" ON bids
   FOR INSERT WITH CHECK (auth.uid() = specialist_id);
 
-CREATE POLICY IF NOT EXISTS "Authenticated update own bid" ON bids
-  FOR UPDATE USING (auth.uid() = specialist_id) WITH CHECK (auth.uid() = specialist_id);
+DROP POLICY IF EXISTS "Authenticated update own bid" ON bids;
+CREATE POLICY "Authenticated update own bid" ON bids
+  FOR UPDATE USING (
+    auth.uid() = specialist_id
+    OR EXISTS (
+      SELECT 1
+      FROM tasks
+      WHERE tasks.id = bids.task_id
+        AND tasks.user_id = auth.uid()
+    )
+  ) WITH CHECK (
+    auth.uid() = specialist_id
+    OR EXISTS (
+      SELECT 1
+      FROM tasks
+      WHERE tasks.id = bids.task_id
+        AND tasks.user_id = auth.uid()
+    )
+  );
 
-CREATE POLICY IF NOT EXISTS "Authenticated delete own bid" ON bids
+DROP POLICY IF EXISTS "Authenticated delete own bid" ON bids;
+CREATE POLICY "Authenticated delete own bid" ON bids
   FOR DELETE USING (auth.uid() = specialist_id);
 
 -- Messages: public read and authenticated writes
-CREATE POLICY IF NOT EXISTS "Public read messages" ON messages
+DROP POLICY IF EXISTS "Public read messages" ON messages;
+CREATE POLICY "Public read messages" ON messages
   FOR SELECT USING (true);
 
-CREATE POLICY IF NOT EXISTS "Authenticated insert task messages" ON messages
+DROP POLICY IF EXISTS "Authenticated insert task messages" ON messages;
+CREATE POLICY "Authenticated insert task messages" ON messages
   FOR INSERT WITH CHECK (auth.uid() = sender_id);
 
 -- Workspace rooms: room participants only
-CREATE POLICY IF NOT EXISTS "Workspace participants can read rooms" ON workspace_rooms
+DROP POLICY IF EXISTS "Workspace participants can read rooms" ON workspace_rooms;
+CREATE POLICY "Workspace participants can read rooms" ON workspace_rooms
   FOR SELECT USING (
     auth.uid() = client_id OR auth.uid() = specialist_id
   );
 
-CREATE POLICY IF NOT EXISTS "Workspace participants can insert rooms" ON workspace_rooms
+DROP POLICY IF EXISTS "Workspace participants can insert rooms" ON workspace_rooms;
+CREATE POLICY "Workspace participants can insert rooms" ON workspace_rooms
   FOR INSERT WITH CHECK (auth.uid() = client_id OR auth.uid() = specialist_id);
 
-CREATE POLICY IF NOT EXISTS "Workspace participants can update rooms" ON workspace_rooms
+DROP POLICY IF EXISTS "Workspace participants can update rooms" ON workspace_rooms;
+CREATE POLICY "Workspace participants can update rooms" ON workspace_rooms
   FOR UPDATE USING (
     auth.uid() = client_id OR auth.uid() = specialist_id
   ) WITH CHECK (
     auth.uid() = client_id OR auth.uid() = specialist_id
   );
 
-CREATE POLICY IF NOT EXISTS "Workspace participants can delete rooms" ON workspace_rooms
+DROP POLICY IF EXISTS "Workspace participants can delete rooms" ON workspace_rooms;
+CREATE POLICY "Workspace participants can delete rooms" ON workspace_rooms
   FOR DELETE USING (
     auth.uid() = client_id OR auth.uid() = specialist_id
   );
 
 -- Workspace messages: only room participants can read/insert
-CREATE POLICY IF NOT EXISTS "Workspace message participants can read" ON workspace_messages
+DROP POLICY IF EXISTS "Workspace message participants can read" ON workspace_messages;
+CREATE POLICY "Workspace message participants can read" ON workspace_messages
   FOR SELECT USING (
     EXISTS (
       SELECT 1 FROM workspace_rooms
@@ -222,7 +263,8 @@ CREATE POLICY IF NOT EXISTS "Workspace message participants can read" ON workspa
     )
   );
 
-CREATE POLICY IF NOT EXISTS "Workspace participants can insert messages" ON workspace_messages
+DROP POLICY IF EXISTS "Workspace participants can insert messages" ON workspace_messages;
+CREATE POLICY "Workspace participants can insert messages" ON workspace_messages
   FOR INSERT WITH CHECK (
     auth.uid() = sender_id
     AND EXISTS (
@@ -232,11 +274,102 @@ CREATE POLICY IF NOT EXISTS "Workspace participants can insert messages" ON work
   );
 
 -- Reviews: client may submit reviews for completed rooms
-CREATE POLICY IF NOT EXISTS "Authenticated insert reviews" ON reviews
+DROP POLICY IF EXISTS "Authenticated insert reviews" ON reviews;
+CREATE POLICY "Authenticated insert reviews" ON reviews
   FOR INSERT WITH CHECK (auth.uid() = client_id);
 
-CREATE POLICY IF NOT EXISTS "Authenticated select reviews" ON reviews
+DROP POLICY IF EXISTS "Authenticated select reviews" ON reviews;
+CREATE POLICY "Authenticated select reviews" ON reviews
   FOR SELECT USING (auth.uid() = client_id OR auth.uid() = specialist_id);
+
+-- 3.1) RPC: Atomic bid acceptance (task owner only)
+CREATE OR REPLACE FUNCTION public.accept_bid(p_task_id uuid, p_bid_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_client_id text;
+  v_specialist_id text;
+  v_amount numeric;
+  v_room_id uuid;
+BEGIN
+  -- Ensure caller is authenticated
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated';
+  END IF;
+
+  -- Ensure caller owns the task
+  SELECT user_id::text INTO v_client_id
+  FROM tasks
+  WHERE id = p_task_id;
+
+  IF v_client_id IS NULL THEN
+    RAISE EXCEPTION 'Task not found';
+  END IF;
+
+  IF v_client_id <> auth.uid()::text THEN
+    RAISE EXCEPTION 'Forbidden';
+  END IF;
+
+  -- Lock bid row and validate it belongs to the task
+  SELECT specialist_id, amount
+    INTO v_specialist_id, v_amount
+  FROM bids
+  WHERE id = p_bid_id AND task_id = p_task_id
+  FOR UPDATE;
+
+  IF v_specialist_id IS NULL THEN
+    RAISE EXCEPTION 'Bid not found for task';
+  END IF;
+
+  -- Accept selected bid
+  UPDATE bids
+  SET status = 'accepted',
+      updated_at = now()
+  WHERE id = p_bid_id;
+
+  -- Mark other bids as rejected (optional but prevents multiple accepts)
+  UPDATE bids
+  SET status = 'rejected',
+      updated_at = now()
+  WHERE task_id = p_task_id AND id <> p_bid_id AND status <> 'accepted';
+
+  -- Activate task + assign specialist
+  UPDATE tasks
+  SET status = 'active',
+      specialist_id = v_specialist_id::uuid,
+      updated_at = now()
+  WHERE id = p_task_id;
+
+  -- Create (or return existing) workspace room
+  INSERT INTO workspace_rooms (task_id, client_id, specialist_id, status)
+  VALUES (p_task_id, v_client_id::uuid, v_specialist_id::uuid, 'active')
+  ON CONFLICT (task_id, client_id, specialist_id) DO NOTHING
+  RETURNING id INTO v_room_id;
+
+  IF v_room_id IS NULL THEN
+    SELECT id INTO v_room_id
+    FROM workspace_rooms
+    WHERE task_id = p_task_id AND client_id::text = v_client_id AND specialist_id::text = v_specialist_id
+    ORDER BY created_at DESC
+    LIMIT 1;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'task_id', p_task_id,
+    'bid_id', p_bid_id,
+    'client_id', v_client_id,
+    'specialist_id', v_specialist_id,
+    'room_id', v_room_id,
+    'amount', v_amount
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.accept_bid(uuid, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.accept_bid(uuid, uuid) TO authenticated;
 
 -- 4) Realtime publications
 DO $$

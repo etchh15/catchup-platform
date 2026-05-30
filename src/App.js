@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './App.css';
+import { useNotifications } from './hooks/useNotifications';
 
 import { ToastProvider, useToast } from './components/Toast';
 import AuthGateway       from './components/AuthGateway';
@@ -25,7 +26,21 @@ function CatchUpApp() {
   const [districtFilter, setDistrictFilter] = useState('all');
   const [activeRoom, setActiveRoom] = useState(null);
 
-  const { tasks, bids, specialists, loading: dataLoading, syncData, unreadBids } = useMarketplaceData(districtFilter);
+  const { tasks, bids, specialists, loading: dataLoading, syncData } = useMarketplaceData(districtFilter);
+  const {
+    notifications,
+    unreadCount,
+    loading: notificationsLoading,
+    markAsRead,
+    markAllAsRead,
+    clearAll,
+  } = useNotifications(user?.id);
+
+  const handleNotificationClick = (notification) => {
+    if (notification?.action_url) {
+      window.location.href = notification.action_url;
+    }
+  };
 
   // Setup realtime subscriptions
   useRealtimeSubscriptions(syncData, syncData);
@@ -50,7 +65,13 @@ function CatchUpApp() {
         setRole={switchRole}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        unreadCount={unreadBids}
+        unreadCount={unreadCount}
+        notificationLoading={notificationsLoading}
+        notifications={notifications}
+        onNotificationClick={handleNotificationClick}
+        onMarkAsRead={markAsRead}
+        onMarkAllAsRead={markAllAsRead}
+        onClearAll={clearAll}
         onSignOut={signOut}
       />
 

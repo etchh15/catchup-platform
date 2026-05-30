@@ -1,6 +1,21 @@
 import React, { useState } from 'react';
+import NotificationCenter from './NotificationCenter';
 
-export default function Navigation({ user, role, setRole, unreadCount = 0, setActiveTab, activeTab, onSignOut }) {
+export default function Navigation({
+  user,
+  role,
+  setRole,
+  unreadCount = 0,
+  setActiveTab,
+  activeTab,
+  onSignOut,
+  notifications = [],
+  notificationLoading = false,
+  onNotificationClick = null,
+  onMarkAsRead = null,
+  onMarkAllAsRead = null,
+  onClearAll = null,
+}) {
   const [showDropdown, setShowDropdown] = useState(false);
 
   const links = [
@@ -31,6 +46,16 @@ export default function Navigation({ user, role, setRole, unreadCount = 0, setAc
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <NotificationCenter
+          notifications={notifications}
+          unreadCount={unreadCount}
+          loading={notificationLoading}
+          onNotificationClick={onNotificationClick}
+          onMarkAsRead={onMarkAsRead}
+          onMarkAllAsRead={onMarkAllAsRead}
+          onClearAll={onClearAll}
+        />
+
         <button
           onClick={() => setRole(role === 'client' ? 'specialist' : 'client')}
           className="btn btn-sm"
