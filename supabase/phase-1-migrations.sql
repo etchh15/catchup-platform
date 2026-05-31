@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS notifications (
   recipient_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   sender_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
   type notification_type NOT NULL,
-  task_id bigint REFERENCES tasks(id) ON DELETE CASCADE,
+  task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
   related_id UUID, -- Foreign key to dispute_id, review_id, bid_id, etc.
   title TEXT NOT NULL,
   message TEXT NOT NULL,
@@ -51,11 +51,11 @@ CREATE TABLE IF NOT EXISTS notifications (
   CONSTRAINT fk_sender_profile FOREIGN KEY (sender_id) REFERENCES profiles(id)
 );
 
-CREATE INDEX idx_notifications_recipient_created 
+CREATE INDEX IF NOT EXISTS idx_notifications_recipient_created 
   ON notifications(recipient_id, created_at DESC);
-CREATE INDEX idx_notifications_unread 
+CREATE INDEX IF NOT EXISTS idx_notifications_unread 
   ON notifications(recipient_id, is_read) WHERE is_read = false;
-CREATE INDEX idx_notifications_type 
+CREATE INDEX IF NOT EXISTS idx_notifications_type 
   ON notifications(recipient_id, type);
 
 -- User notification preferences - per-user control over notification channels
@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS notification_delivery (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
-CREATE INDEX idx_notification_delivery_status 
+CREATE INDEX IF NOT EXISTS idx_notification_delivery_status 
   ON notification_delivery(notification_id, status);
 
 -- ============================================================================
@@ -104,7 +104,7 @@ CREATE INDEX idx_notification_delivery_status
 CREATE TABLE IF NOT EXISTS specialist_metrics (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   specialist_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  task_id bigint NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
   posted_at TIMESTAMP WITH TIME ZONE,
   first_bid_at TIMESTAMP WITH TIME ZONE,
   response_time_hours INT, -- Hours between post and first bid
@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS specialist_metrics (
   UNIQUE(specialist_id, task_id)
 );
 
-CREATE INDEX idx_specialist_metrics_specialist 
+CREATE INDEX IF NOT EXISTS idx_specialist_metrics_specialist 
   ON specialist_metrics(specialist_id);
 
 -- Specialist reputation - materialized reputation view (refreshed after task completion)
@@ -153,13 +153,25 @@ CREATE TABLE IF NOT EXISTS contact_access_log (
   accessed_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
-CREATE INDEX idx_contact_access_viewer_target 
+CREATE INDEX IF NOT EXISTS idx_contact_access_viewer_target 
   ON contact_access_log(viewer_id, target_id);
-CREATE INDEX idx_contact_access_target 
+CREATE INDEX IF NOT EXISTS idx_contact_access_target 
   ON contact_access_log(target_id);
 
 -- Add contact_revealed_at column to workspace_rooms to track first contact reveal
 ALTER TABLE workspace_rooms ADD COLUMN IF NOT EXISTS contact_revealed_at TIMESTAMP WITH TIME ZONE;
+
+-- Ensure the tasks table has the marketplace columns required by the application
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'tasks') THEN
+    ALTER TABLE tasks
+      ADD COLUMN IF NOT EXISTS client_name text,
+      ADD COLUMN IF NOT EXISTS budget numeric,
+      ADD COLUMN IF NOT EXISTS specialist_id uuid REFERENCES profiles(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT now();
+  END IF;
+END$$;
 
 -- ============================================================================
 -- RLS POLICIES FOR NEW TABLES
@@ -177,90 +189,175 @@ ALTER TABLE contact_access_log ENABLE ROW LEVEL SECURITY;
 -- NOTIFICATIONS TABLE RLS
 -- ============================================================================
 
--- Users can read their own notifications
-CREATE POLICY "Users read own notifications"
-  ON notifications FOR SELECT
-  USING (auth.uid() = recipient_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE policyname = 'Users read own notifications'
+      AND schemaname = 'public' AND tablename = 'notifications'
+  ) THEN
+    CREATE POLICY "Users read own notifications"
+      ON notifications FOR SELECT
+      USING (auth.uid()::uuid = recipient_id);
+  END IF;
 
--- System can insert notifications (use Supabase Functions/RLS from service role)
-CREATE POLICY "Service role inserts notifications"
-  ON notifications FOR INSERT
-  WITH CHECK (true);
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE policyname = 'Service role inserts notifications'
+      AND schemaname = 'public' AND tablename = 'notifications'
+  ) THEN
+    CREATE POLICY "Service role inserts notifications"
+      ON notifications FOR INSERT
+      WITH CHECK (true);
+  END IF;
 
--- Users can update their own notifications (mark as read)
-CREATE POLICY "Users update own notifications"
-  ON notifications FOR UPDATE
-  USING (auth.uid() = recipient_id)
-  WITH CHECK (auth.uid() = recipient_id);
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE policyname = 'Users update own notifications'
+      AND schemaname = 'public' AND tablename = 'notifications'
+  ) THEN
+    CREATE POLICY "Users update own notifications"
+      ON notifications FOR UPDATE
+      USING (auth.uid()::uuid = recipient_id)
+      WITH CHECK (auth.uid()::uuid = recipient_id);
+  END IF;
+END$$;
 
 -- ============================================================================
 -- NOTIFICATION PREFERENCES TABLE RLS
 -- ============================================================================
 
--- Users can read and update their own preferences
-CREATE POLICY "Users read own notification preferences"
-  ON notification_preferences FOR SELECT
-  USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE policyname = 'Users read own notification preferences'
+      AND schemaname = 'public' AND tablename = 'notification_preferences'
+  ) THEN
+    CREATE POLICY "Users read own notification preferences"
+      ON notification_preferences FOR SELECT
+      USING (auth.uid()::uuid = user_id);
+  END IF;
 
-CREATE POLICY "Users update own notification preferences"
-  ON notification_preferences FOR UPDATE
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE policyname = 'Users update own notification preferences'
+      AND schemaname = 'public' AND tablename = 'notification_preferences'
+  ) THEN
+    CREATE POLICY "Users update own notification preferences"
+      ON notification_preferences FOR UPDATE
+      USING (auth.uid()::uuid = user_id)
+      WITH CHECK (auth.uid()::uuid = user_id);
+  END IF;
 
-CREATE POLICY "Users insert own notification preferences"
-  ON notification_preferences FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE policyname = 'Users insert own notification preferences'
+      AND schemaname = 'public' AND tablename = 'notification_preferences'
+  ) THEN
+    CREATE POLICY "Users insert own notification preferences"
+      ON notification_preferences FOR INSERT
+      WITH CHECK (auth.uid()::uuid = user_id);
+  END IF;
+END$$;
 
 -- ============================================================================
 -- NOTIFICATION DELIVERY TABLE RLS
 -- ============================================================================
 
--- Service role only (for async email/SMS sending)
-CREATE POLICY "Service role manages delivery"
-  ON notification_delivery FOR ALL
-  USING (true);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE policyname = 'Service role manages delivery'
+      AND schemaname = 'public' AND tablename = 'notification_delivery'
+  ) THEN
+    CREATE POLICY "Service role manages delivery"
+      ON notification_delivery FOR ALL
+      USING (true);
+  END IF;
+END$$;
 
 -- ============================================================================
 -- SPECIALIST METRICS TABLE RLS
 -- ============================================================================
 
--- Public read (specialists can see each other's metrics)
-CREATE POLICY "Public read specialist metrics"
-  ON specialist_metrics FOR SELECT
-  USING (true);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE policyname = 'Public read specialist metrics'
+      AND schemaname = 'public' AND tablename = 'specialist_metrics'
+  ) THEN
+    CREATE POLICY "Public read specialist metrics"
+      ON specialist_metrics FOR SELECT
+      USING (true);
+  END IF;
 
--- Service role creates metrics
-CREATE POLICY "Service role inserts metrics"
-  ON specialist_metrics FOR INSERT
-  WITH CHECK (true);
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE policyname = 'Service role inserts metrics'
+      AND schemaname = 'public' AND tablename = 'specialist_metrics'
+  ) THEN
+    CREATE POLICY "Service role inserts metrics"
+      ON specialist_metrics FOR INSERT
+      WITH CHECK (true);
+  END IF;
+END$$;
 
 -- ============================================================================
 -- SPECIALIST REPUTATION TABLE RLS
 -- ============================================================================
 
--- Public read (everyone can see reputation)
-CREATE POLICY "Public read specialist reputation"
-  ON specialist_reputation FOR SELECT
-  USING (true);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE policyname = 'Public read specialist reputation'
+      AND schemaname = 'public' AND tablename = 'specialist_reputation'
+  ) THEN
+    CREATE POLICY "Public read specialist reputation"
+      ON specialist_reputation FOR SELECT
+      USING (true);
+  END IF;
 
--- Service role manages reputation
-CREATE POLICY "Service role manages reputation"
-  ON specialist_reputation FOR ALL
-  USING (true);
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE policyname = 'Service role manages reputation'
+      AND schemaname = 'public' AND tablename = 'specialist_reputation'
+  ) THEN
+    CREATE POLICY "Service role manages reputation"
+      ON specialist_reputation FOR ALL
+      USING (true);
+  END IF;
+END$$;
 
 -- ============================================================================
 -- CONTACT ACCESS LOG TABLE RLS
 -- ============================================================================
 
--- Users can read their own access log
-CREATE POLICY "Users read own contact access"
-  ON contact_access_log FOR SELECT
-  USING (auth.uid() = viewer_id OR auth.uid() = target_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE policyname = 'Users read own contact access'
+      AND schemaname = 'public' AND tablename = 'contact_access_log'
+  ) THEN
+    CREATE POLICY "Users read own contact access"
+      ON contact_access_log FOR SELECT
+      USING (auth.uid()::uuid = viewer_id OR auth.uid()::uuid = target_id);
+  END IF;
 
--- Service role inserts access logs
-CREATE POLICY "Service role inserts access logs"
-  ON contact_access_log FOR INSERT
-  WITH CHECK (true);
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE policyname = 'Service role inserts access logs'
+      AND schemaname = 'public' AND tablename = 'contact_access_log'
+  ) THEN
+    CREATE POLICY "Service role inserts access logs"
+      ON contact_access_log FOR INSERT
+      WITH CHECK (true);
+  END IF;
+END$$;
 
 -- ============================================================================
 -- HELPER FUNCTIONS
@@ -323,7 +420,7 @@ CREATE OR REPLACE FUNCTION create_notification(
   p_recipient_id UUID,
   p_sender_id UUID,
   p_type notification_type,
-  p_task_id bigint,
+  p_task_id UUID,
   p_title TEXT,
   p_message TEXT,
   p_action_url TEXT

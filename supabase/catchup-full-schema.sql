@@ -150,24 +150,24 @@ CREATE POLICY "Public read registered specialists" ON profiles
 
 DROP POLICY IF EXISTS "Authenticated read own profile" ON profiles;
 CREATE POLICY "Authenticated read own profile" ON profiles
-  FOR SELECT USING (auth.uid() = id);
+  FOR SELECT USING (auth.uid()::uuid = id);
 
 DROP POLICY IF EXISTS "Authenticated insert own profile" ON profiles;
 CREATE POLICY "Authenticated insert own profile" ON profiles
-  FOR INSERT WITH CHECK (auth.uid() = id);
+  FOR INSERT WITH CHECK (auth.uid()::uuid = id);
 
 DROP POLICY IF EXISTS "Authenticated update own profile" ON profiles;
 CREATE POLICY "Authenticated update own profile" ON profiles
-  FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+  FOR UPDATE USING (auth.uid()::uuid = id) WITH CHECK (auth.uid()::uuid = id);
 
 -- Clients and specialists: owner updates only
 DROP POLICY IF EXISTS "Authenticated manage own client row" ON clients;
 CREATE POLICY "Authenticated manage own client row" ON clients
-  FOR ALL USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+  FOR ALL USING (auth.uid()::uuid = id) WITH CHECK (auth.uid()::uuid = id);
 
 DROP POLICY IF EXISTS "Authenticated manage own specialist row" ON specialists;
 CREATE POLICY "Authenticated manage own specialist row" ON specialists
-  FOR ALL USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+  FOR ALL USING (auth.uid()::uuid = id) WITH CHECK (auth.uid()::uuid = id);
 
 -- Tasks: anyone can read, authenticated user can create / manage own tasks
 DROP POLICY IF EXISTS "Public read tasks" ON tasks;
@@ -176,15 +176,15 @@ CREATE POLICY "Public read tasks" ON tasks
 
 DROP POLICY IF EXISTS "Authenticated insert own task" ON tasks;
 CREATE POLICY "Authenticated insert own task" ON tasks
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
+  FOR INSERT WITH CHECK (auth.uid()::uuid = user_id);
 
 DROP POLICY IF EXISTS "Authenticated update own task" ON tasks;
 CREATE POLICY "Authenticated update own task" ON tasks
-  FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+  FOR UPDATE USING (auth.uid()::uuid = user_id) WITH CHECK (auth.uid()::uuid = user_id);
 
 DROP POLICY IF EXISTS "Authenticated delete own task" ON tasks;
 CREATE POLICY "Authenticated delete own task" ON tasks
-  FOR DELETE USING (auth.uid() = user_id);
+  FOR DELETE USING (auth.uid()::uuid = user_id);
 
 -- Bids: public read, specialists can write their own bids
 DROP POLICY IF EXISTS "Public read bids" ON bids;
@@ -193,31 +193,31 @@ CREATE POLICY "Public read bids" ON bids
 
 DROP POLICY IF EXISTS "Authenticated insert own bid" ON bids;
 CREATE POLICY "Authenticated insert own bid" ON bids
-  FOR INSERT WITH CHECK (auth.uid() = specialist_id);
+  FOR INSERT WITH CHECK (auth.uid()::uuid = specialist_id);
 
 DROP POLICY IF EXISTS "Authenticated update own bid" ON bids;
 CREATE POLICY "Authenticated update own bid" ON bids
   FOR UPDATE USING (
-    auth.uid() = specialist_id
+    auth.uid()::uuid = specialist_id
     OR EXISTS (
       SELECT 1
       FROM tasks
       WHERE tasks.id = bids.task_id
-        AND tasks.user_id = auth.uid()
+        AND tasks.user_id = auth.uid()::uuid
     )
   ) WITH CHECK (
-    auth.uid() = specialist_id
+    auth.uid()::uuid = specialist_id
     OR EXISTS (
       SELECT 1
       FROM tasks
       WHERE tasks.id = bids.task_id
-        AND tasks.user_id = auth.uid()
+        AND tasks.user_id = auth.uid()::uuid
     )
   );
 
 DROP POLICY IF EXISTS "Authenticated delete own bid" ON bids;
 CREATE POLICY "Authenticated delete own bid" ON bids
-  FOR DELETE USING (auth.uid() = specialist_id);
+  FOR DELETE USING (auth.uid()::uuid = specialist_id);
 
 -- Messages: public read and authenticated writes
 DROP POLICY IF EXISTS "Public read messages" ON messages;
@@ -226,31 +226,31 @@ CREATE POLICY "Public read messages" ON messages
 
 DROP POLICY IF EXISTS "Authenticated insert task messages" ON messages;
 CREATE POLICY "Authenticated insert task messages" ON messages
-  FOR INSERT WITH CHECK (auth.uid() = sender_id);
+  FOR INSERT WITH CHECK (auth.uid()::uuid = sender_id);
 
 -- Workspace rooms: room participants only
 DROP POLICY IF EXISTS "Workspace participants can read rooms" ON workspace_rooms;
 CREATE POLICY "Workspace participants can read rooms" ON workspace_rooms
   FOR SELECT USING (
-    auth.uid() = client_id OR auth.uid() = specialist_id
+    auth.uid()::uuid = client_id OR auth.uid()::uuid = specialist_id
   );
 
 DROP POLICY IF EXISTS "Workspace participants can insert rooms" ON workspace_rooms;
 CREATE POLICY "Workspace participants can insert rooms" ON workspace_rooms
-  FOR INSERT WITH CHECK (auth.uid() = client_id OR auth.uid() = specialist_id);
+  FOR INSERT WITH CHECK (auth.uid()::uuid = client_id OR auth.uid()::uuid = specialist_id);
 
 DROP POLICY IF EXISTS "Workspace participants can update rooms" ON workspace_rooms;
 CREATE POLICY "Workspace participants can update rooms" ON workspace_rooms
   FOR UPDATE USING (
-    auth.uid() = client_id OR auth.uid() = specialist_id
+    auth.uid()::uuid = client_id OR auth.uid()::uuid = specialist_id
   ) WITH CHECK (
-    auth.uid() = client_id OR auth.uid() = specialist_id
+    auth.uid()::uuid = client_id OR auth.uid()::uuid = specialist_id
   );
 
 DROP POLICY IF EXISTS "Workspace participants can delete rooms" ON workspace_rooms;
 CREATE POLICY "Workspace participants can delete rooms" ON workspace_rooms
   FOR DELETE USING (
-    auth.uid() = client_id OR auth.uid() = specialist_id
+    auth.uid()::uuid = client_id OR auth.uid()::uuid = specialist_id
   );
 
 -- Workspace messages: only room participants can read/insert
@@ -259,28 +259,28 @@ CREATE POLICY "Workspace message participants can read" ON workspace_messages
   FOR SELECT USING (
     EXISTS (
       SELECT 1 FROM workspace_rooms
-      WHERE id = room_id AND (client_id = auth.uid() OR specialist_id = auth.uid())
+      WHERE id = room_id AND (client_id = auth.uid()::uuid OR specialist_id = auth.uid()::uuid)
     )
   );
 
 DROP POLICY IF EXISTS "Workspace participants can insert messages" ON workspace_messages;
 CREATE POLICY "Workspace participants can insert messages" ON workspace_messages
   FOR INSERT WITH CHECK (
-    auth.uid() = sender_id
+    auth.uid()::uuid = sender_id
     AND EXISTS (
       SELECT 1 FROM workspace_rooms
-      WHERE id = room_id AND (client_id = auth.uid() OR specialist_id = auth.uid())
+      WHERE id = room_id AND (client_id = auth.uid()::uuid OR specialist_id = auth.uid()::uuid)
     )
   );
 
 -- Reviews: client may submit reviews for completed rooms
 DROP POLICY IF EXISTS "Authenticated insert reviews" ON reviews;
 CREATE POLICY "Authenticated insert reviews" ON reviews
-  FOR INSERT WITH CHECK (auth.uid() = client_id);
+  FOR INSERT WITH CHECK (auth.uid()::uuid = client_id);
 
 DROP POLICY IF EXISTS "Authenticated select reviews" ON reviews;
 CREATE POLICY "Authenticated select reviews" ON reviews
-  FOR SELECT USING (auth.uid() = client_id OR auth.uid() = specialist_id);
+  FOR SELECT USING (auth.uid()::uuid = client_id OR auth.uid()::uuid = specialist_id);
 
 -- 3.1) RPC: Atomic bid acceptance (task owner only)
 CREATE OR REPLACE FUNCTION public.accept_bid(p_task_id uuid, p_bid_id uuid)
