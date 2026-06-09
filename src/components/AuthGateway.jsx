@@ -72,7 +72,7 @@ export default function AuthGateway({ onAuthSuccess }) {
               <span>payment records</span>
             </div>
             <div>
-              <strong>Cairo/Giza</strong>
+              <strong>Cairo/Alexandria</strong>
               <span>controlled launch</span>
             </div>
           </div>
@@ -86,7 +86,7 @@ export default function AuthGateway({ onAuthSuccess }) {
             </h2>
             <p className="auth-subtitle">
               {isSignUp
-                ? 'Join the controlled Cairo/Giza beta for trusted local services.'
+                ? 'Join the controlled Cairo/Alexandria beta for trusted local services.'
                 : 'Use your email to continue to your workspace.'}
             </p>
           </div>

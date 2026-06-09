@@ -1,7 +1,7 @@
 import React from 'react';
 
 const checklist = [
-  ['DONE', 'Scope frozen', 'Cairo/Giza and five low-risk categories only.'],
+  ['DONE', 'Scope frozen', 'Cairo/Alexandria and five low-risk categories only.'],
   ['DONE', 'Payments safe', 'No escrow or platform-held funds during beta.'],
   ['OPERATOR', 'Verification queue', 'Review every specialist request within 48 hours.'],
   ['OPERATOR', 'Emergency operator', 'One trusted person knows the pause switch, queue, disputes, waitlist, and playbook.'],

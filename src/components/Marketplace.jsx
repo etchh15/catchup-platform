@@ -501,12 +501,12 @@ export default function Marketplace({
         <div className="marketplace-hero-top">
           <div className="marketplace-hero-copy">
             <h2 style={{ marginBottom: 4 }}>
-              {t('marketplaceTitle', 'Find the right specialist in Cairo/Giza')}
+              {t('marketplaceTitle', 'Find the right specialist in Cairo/Alexandria')}
             </h2>
             <p style={{ fontSize: 14, color: 'var(--text-2)', margin: 0 }}>
               {role === 'client'
-                ? t('marketplaceClientIntro', 'Post requests, compare manually reviewed specialists in Cairo/Giza, and move accepted work into a protected workspace.')
-                : t('marketplaceSpecialistIntro', 'Verified specialists can browse Cairo/Giza beta jobs, send strong quotes, and build reputation through completed work.')}
+                ? t('marketplaceClientIntro', 'Post requests, compare manually reviewed specialists in Cairo/Alexandria, and move accepted work into a protected workspace.')
+                : t('marketplaceSpecialistIntro', 'Verified specialists can browse Cairo/Alexandria beta jobs, send strong quotes, and build reputation through completed work.')}
             </p>
             <div className="marketplace-community-row" aria-label="Marketplace trust signals">
               {marketplacePulse.map((item) => (
@@ -524,7 +524,7 @@ export default function Marketplace({
             </div>
             <div className="marketplace-live-map">
               <span>Cairo</span>
-              <span>Giza</span>
+              <span>Alexandria</span>
               <span>Beta only</span>
               <span>Manual review</span>
             </div>
@@ -583,7 +583,7 @@ export default function Marketplace({
               onChange={e => setDistrictFilter(e.target.value)}
               className="marketplace-district-select"
             >
-              <option value="all">{t('allDistricts', 'Cairo/Giza beta')}</option>
+              <option value="all">{t('allDistricts', 'Cairo/Alexandria beta')}</option>
               {DISTRICTS.map(d => (
                 <option key={d} value={d.toLowerCase()}>
                   {d}

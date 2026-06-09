@@ -4,7 +4,7 @@ const sections = [
   {
     title: 'Controlled Beta Scope',
     items: [
-      'CatchUp is operating a controlled Cairo/Giza beta.',
+      'CatchUp is operating a controlled Cairo/Alexandria beta.',
       'Supported categories are Cleaning, Tutoring, Beauty, Moving help, and Simple repairs.',
       'Services outside this scope may be rejected or deferred.',
     ],

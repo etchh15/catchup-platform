@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createWaitlistSignup, fetchPlatformSettings } from '../services/supabaseService';
 
 const betaCategories = ['Cleaning', 'Tutoring', 'Beauty', 'Moving help', 'Simple repairs'];
-const betaAreas = ['Cairo', 'Giza'];
+const betaAreas = ['Cairo', 'Alexandria'];
 
 export default function PublicLanding({ onOpenAuth }) {
   const [intent, setIntent] = useState('client');
@@ -80,7 +80,7 @@ export default function PublicLanding({ onOpenAuth }) {
 
       <section className="public-hero">
         <div className="public-hero-copy">
-          <span className="public-kicker">Controlled Cairo/Giza beta</span>
+          <span className="public-kicker">Controlled Cairo/Alexandria beta</span>
           <h1>Trusted local services, scoped before contact.</h1>
           <p>
             CatchUp helps clients and manually reviewed specialists agree on the job,

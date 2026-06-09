@@ -24,7 +24,7 @@ export function getCategoryBadgeType(category) {
 }
 
 export const CATEGORIES = ['Cleaning', 'Tutoring', 'Beauty', 'Moving help', 'Simple repairs'];
-export const BETA_MARKETS = ['Cairo', 'Giza'];
+export const BETA_MARKETS = ['Cairo', 'Alexandria'];
 export const EGYPT_MARKETS = [
   'Cairo',
   'Giza',

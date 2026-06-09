@@ -4,7 +4,7 @@ Use this playbook while the founder is away. The goal is to keep the beta calm, 
 
 ## Beta Scope
 
-- Markets: Cairo and Giza only.
+- Markets: Cairo and Alexandria only.
 - Categories: Cleaning, Tutoring, Beauty, Moving help, Simple repairs.
 - Payments: off-platform during beta. CatchUp records agreed amount and completion state, but does not hold funds.
 - Specialists: manual review required before proposals.
@@ -72,7 +72,7 @@ Approve a specialist only when their profile has enough trust evidence:
 
 - Real full name or business name
 - Service category inside beta scope
-- Cairo/Giza service area
+- Cairo/Alexandria service area
 - Phone/contact details available privately
 - Document or portfolio evidence reviewed
 - No obvious duplicate, spam, or fake identity signals
@@ -148,7 +148,7 @@ The export writes timestamped JSON files under `backups/` for profiles, jobs, bi
 
 Use this line for social posts:
 
-CatchUp is opening a controlled Cairo/Giza beta for trusted local services. Clients can join freely; specialists apply for manual review.
+CatchUp is opening a controlled Cairo/Alexandria beta for trusted local services. Clients can join freely; specialists apply for manual review.
 
 Do not advertise all Egypt, instant payments, guaranteed outcomes, or emergency services.
 

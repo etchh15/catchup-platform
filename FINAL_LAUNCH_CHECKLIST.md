@@ -8,7 +8,7 @@ Use this before any public beta push. Every item must be one of:
 
 ## Product Scope
 
-- `DONE` Cairo/Giza controlled beta only.
+- `DONE` Cairo/Alexandria controlled beta only.
 - `DONE` Categories limited to Cleaning, Tutoring, Beauty, Moving help, Simple repairs.
 - `DONE` No emergency, medical, legal, high-risk, electrical-heavy, or plumbing-heavy services.
 - `DONE` Public copy avoids an operational “all Egypt” promise.
@@ -60,4 +60,4 @@ Pause onboarding if any are true:
 
 Use controlled language:
 
-CatchUp is opening a controlled Cairo/Giza beta for trusted local services. Clients can join freely; specialists apply for manual review.
+CatchUp is opening a controlled Cairo/Alexandria beta for trusted local services. Clients can join freely; specialists apply for manual review.
