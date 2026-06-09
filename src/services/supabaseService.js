@@ -76,6 +76,52 @@ export async function updatePlatformOnboarding({ paused, reason = '' }) {
   if (error) throw error;
   return data?.value || value;
 }
+
+export async function fetchAdminAlerts({ status = 'pending', limit = 25 } = {}) {
+  let query = supabase
+    .from('admin_alerts')
+    .select('id, event_type, severity, subject, body, payload, recipient_email, delivery_status, delivery_attempts, last_delivery_error, created_at, sent_at')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (status && status !== 'all') {
+    query = query.eq('delivery_status', status);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function markAdminAlertReviewed(alertId) {
+  const { data, error } = await supabase
+    .from('admin_alerts')
+    .update({ delivery_status: 'skipped', last_delivery_error: null })
+    .eq('id', alertId)
+    .select('id, event_type, severity, subject, body, payload, recipient_email, delivery_status, delivery_attempts, last_delivery_error, created_at, sent_at')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function reportCriticalWorkflowFailure(workflow, error, context = {}) {
+  const message = error?.message || String(error || 'Unknown error');
+  try {
+    await supabase.rpc('report_critical_workflow_failure', {
+      p_workflow: workflow,
+      p_error_message: message,
+      p_context: context,
+    });
+  } catch (reportError) {
+    console.warn('Could not report critical workflow failure:', reportError?.message || reportError);
+  }
+}
+
+async function throwWithWorkflowReport(workflow, error, context = {}) {
+  await reportCriticalWorkflowFailure(workflow, error, context);
+  throw error;
+}
   /**
    * Appointments (Phase 3.2)
    */
@@ -93,7 +139,12 @@ export async function submitBid(bidData) {
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    await throwWithWorkflowReport('submit_proposal', error, {
+      task_id: bidData?.task_id,
+      specialist_id: bidData?.specialist_id,
+    });
+  }
   return data;
 }
 
@@ -148,7 +199,13 @@ export async function createTask(taskData) {
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    await throwWithWorkflowReport('create_task', error, {
+      user_id: taskData?.user_id,
+      category: taskData?.category,
+      district_tag: taskData?.district_tag,
+    });
+  }
   return data;
 }
 
@@ -228,11 +285,10 @@ export async function currentUserIsPlatformAdmin() {
 export async function fetchVerificationQueue() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, email, full_name, role, bio, district_tag, category, professional_title, job_title, phone_number, is_verified, verification_status, verification_note, verification_requested_at, created_at')
+    .select('id, email, full_name, role, bio, district_tag, category, professional_title, job_title, phone_number, is_verified, verification_status, verification_note, verification_requested_at')
     .in('role', ['specialist', 'SPECIALIST'])
     .in('verification_status', ['pending_verification', 'unverified', 'rejected'])
     .order('verification_requested_at', { ascending: false, nullsFirst: false })
-    .order('created_at', { ascending: false })
     .limit(100);
 
   if (error) throw error;
@@ -255,7 +311,7 @@ export async function updateSpecialistVerification(profileId, status, note = '')
     .from('profiles')
     .update(updates)
     .eq('id', profileId)
-    .select('id, email, full_name, role, bio, district_tag, category, professional_title, job_title, phone_number, is_verified, verification_status, verification_note, verification_requested_at, created_at')
+    .select('id, email, full_name, role, bio, district_tag, category, professional_title, job_title, phone_number, is_verified, verification_status, verification_note, verification_requested_at')
     .single();
 
   if (error) throw error;
@@ -721,10 +777,18 @@ export async function sendWorkspaceMessage(roomId, senderId, messageText, taskId
 
   if (!rpcError) return rpcData;
   if (rpcError?.code !== '42883' && !String(rpcError?.message || '').includes('send_workspace_message')) {
-    throw rpcError;
+    await throwWithWorkflowReport('send_workspace_message', rpcError, {
+      room_id: roomId,
+      task_id: taskId,
+      sender_id: senderId,
+    });
   }
 
-  throw new Error('Workspace messaging is not available because the required database RPC is missing.');
+  await throwWithWorkflowReport('send_workspace_message', new Error('Workspace messaging is not available because the required database RPC is missing.'), {
+    room_id: roomId,
+    task_id: taskId,
+    sender_id: senderId,
+  });
 }
 
 /**
@@ -1426,7 +1490,13 @@ export async function fileDispute(taskId, reason, reasonCategory, messageId = nu
       p_referenced_message_id: messageId,
     });
 
-  if (error) throw error;
+  if (error) {
+    await throwWithWorkflowReport('file_dispute', error, {
+      task_id: taskId,
+      reason_category: reasonCategory,
+      referenced_message_id: messageId,
+    });
+  }
   return data;
 }
 
@@ -1439,7 +1509,14 @@ export async function uploadDisputeEvidence(disputeId, files) {
       .from('disputes')
       .upload(fileName, file);
 
-    if (uploadError) throw uploadError;
+    if (uploadError) {
+      await throwWithWorkflowReport('upload_dispute_evidence', uploadError, {
+        dispute_id: disputeId,
+        filename: file.name,
+        file_size: file.size,
+        file_type: file.type,
+      });
+    }
 
     const { data } = supabase.storage.from('disputes').getPublicUrl(fileName);
     uploadedEvidence.push({
@@ -1464,7 +1541,12 @@ export async function uploadDisputeEvidence(disputeId, files) {
       p_evidence: [...existingEvidence, ...uploadedEvidence],
     });
 
-  if (updateError) throw updateError;
+  if (updateError) {
+    await throwWithWorkflowReport('append_dispute_evidence', updateError, {
+      dispute_id: disputeId,
+      uploaded_count: uploadedEvidence.length,
+    });
+  }
   return uploadedEvidence;
 }
 

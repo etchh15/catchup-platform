@@ -443,6 +443,19 @@
   font-size: 17px;
 }
 
+.launch-checklist-row em {
+  display: inline-flex;
+  margin-left: 8px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  color: var(--gold-light);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
 .launch-checklist-row p {
   margin: 4px 0 0;
   color: var(--text-2);
@@ -1344,7 +1357,7 @@ button.marketplace-summary-item:hover {
 }
 
 .admin-beta-grid {
-  grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
+  grid-template-columns: minmax(0, 1.25fr) repeat(2, minmax(220px, 0.7fr));
 }
 
 .admin-beta-columns {
@@ -1458,6 +1471,19 @@ button.marketplace-summary-item:hover {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.admin-alerts-panel {
+  margin-bottom: 16px;
+}
+
+.admin-list-row.alert-high,
+.admin-list-row.alert-critical {
+  border-color: var(--red-border);
+}
+
+.admin-list-row.alert-medium {
+  border-color: var(--yellow-border);
 }
 
 /* ── Mobile ── */

@@ -19,8 +19,23 @@ Open the admin System page and review:
 - Abuse reports
 - Unpaid accepted work
 - Beta waitlist count
+- Pending admin alerts
 
 If any number looks unusual, pause onboarding until the case is understood.
+
+## Admin Alerts
+
+The Operations page has an alert outbox for:
+
+- New disputes
+- Specialist verification requests
+- Onboarding pause events
+- Suspicious activity
+- Failed critical workflows
+
+All alerts target `etchh0@gmail.com`. Until the Supabase `admin-alert-email` Edge Function has `RESEND_API_KEY` configured, alerts remain visible in the admin console as pending/reviewed records.
+
+After production deploy, click **Test monitoring** in Operations and confirm the event appears in Sentry with the production environment and release.
 
 ## Pause Onboarding
 

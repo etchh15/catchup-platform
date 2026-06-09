@@ -1,14 +1,15 @@
 import React from 'react';
 
 const checklist = [
-  ['Scope frozen', 'Cairo/Giza and five low-risk categories only.'],
-  ['Payments safe', 'No escrow or platform-held funds during beta.'],
-  ['Verification queue clear', 'No specialist should wait more than 48 hours for review.'],
-  ['Emergency operator ready', 'One trusted person knows admin access, pause switch, and playbook.'],
-  ['Disputes monitored', 'No more than 3 unresolved disputes before pausing onboarding.'],
-  ['Public policy visible', 'Users can read payment, dispute, and verification rules before joining.'],
-  ['Monitoring configured', 'Sentry environment and release details are configured for production.'],
-  ['Quality gate passed', '`npm run verify` passes before deploy.'],
+  ['DONE', 'Scope frozen', 'Cairo/Giza and five low-risk categories only.'],
+  ['DONE', 'Payments safe', 'No escrow or platform-held funds during beta.'],
+  ['OPERATOR', 'Verification queue', 'Review every specialist request within 48 hours.'],
+  ['OPERATOR', 'Emergency operator', 'One trusted person knows the pause switch, queue, disputes, waitlist, and playbook.'],
+  ['OPERATOR', 'Stop conditions', 'Pause onboarding after 3 unresolved disputes, any safety incident, or fast-rising abuse.'],
+  ['DONE', 'Public policy visible', 'Users can read payment, dispute, and verification rules before joining.'],
+  ['DONE', 'Admin alerts', 'Disputes, verification requests, onboarding pauses, abuse events, and failed critical workflows create admin alerts.'],
+  ['OPERATOR', 'Monitoring proof', 'Trigger one harmless Sentry test event after production deploy and confirm environment/release tags.'],
+  ['DELAYED', 'Real payments', 'Keep payments off-platform until the founder returns.'],
 ];
 
 export default function LaunchChecklistPage({ onBackHome, onOpenAuth }) {
@@ -34,11 +35,12 @@ export default function LaunchChecklistPage({ onBackHome, onOpenAuth }) {
       </header>
 
       <section className="launch-checklist">
-        {checklist.map(([title, detail], index) => (
+        {checklist.map(([status, title, detail], index) => (
           <article key={title} className="launch-checklist-row">
             <span>{index + 1}</span>
             <div>
               <strong>{title}</strong>
+              <em>{status}</em>
               <p>{detail}</p>
             </div>
           </article>

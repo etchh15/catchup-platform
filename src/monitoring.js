@@ -36,3 +36,22 @@ export function capturePlatformException(error, context = {}) {
     sentryClient.captureException(error, { extra: context });
   }
 }
+
+export function sendMonitoringTestEvent(context = {}) {
+  const payload = {
+    source: 'admin_monitoring_test',
+    tested_at: new Date().toISOString(),
+    ...context,
+  };
+
+  if (sentryClient?.captureMessage) {
+    sentryClient.captureMessage('CatchUp production monitoring test', {
+      level: 'info',
+      extra: payload,
+    });
+    return true;
+  }
+
+  console.warn('Monitoring test skipped because Sentry is not initialized.', payload);
+  return false;
+}

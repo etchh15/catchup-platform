@@ -1,14 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  fetchAdminAlerts,
   fetchPlatformSettings,
   fetchVerificationQueue,
   fetchWaitlistSignups,
+  markAdminAlertReviewed,
   updatePlatformOnboarding,
   updateSpecialistVerification,
   updateWaitlistSignupStatus,
 } from '../services/supabaseService';
 import { useToast } from './Toast';
 import { formatDate, normalizeEgyptMarket } from '../utils/statusHelpers';
+import { sendMonitoringTestEvent } from '../monitoring';
 
 const verificationLabels = {
   pending_verification: 'Pending',
@@ -22,6 +25,7 @@ export default function AdminBetaOperations() {
   const [settings, setSettings] = useState(null);
   const [verificationQueue, setVerificationQueue] = useState([]);
   const [waitlist, setWaitlist] = useState([]);
+  const [adminAlerts, setAdminAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState('');
   const [pauseReason, setPauseReason] = useState('');
@@ -37,14 +41,16 @@ export default function AdminBetaOperations() {
   const load = async () => {
     setLoading(true);
     try {
-      const [settingsData, verificationData, waitlistData] = await Promise.all([
+      const [settingsData, verificationData, waitlistData, alertsData] = await Promise.all([
         fetchPlatformSettings(),
         fetchVerificationQueue(),
         fetchWaitlistSignups(),
+        fetchAdminAlerts({ status: 'pending', limit: 20 }),
       ]);
       setSettings(settingsData);
       setVerificationQueue(verificationData);
       setWaitlist(waitlistData);
+      setAdminAlerts(alertsData);
       setPauseReason(settingsData?.onboarding?.reason || '');
     } catch (err) {
       toast('Could not load beta operations: ' + (err?.message || 'Unknown error'), 'error');
@@ -151,6 +157,29 @@ export default function AdminBetaOperations() {
     }
   };
 
+  const handleAlertReviewed = async (alert) => {
+    setBusyId(`alert-${alert.id}`);
+    try {
+      const updated = await markAdminAlertReviewed(alert.id);
+      setAdminAlerts((current) => current.map((item) => (item.id === updated.id ? updated : item)).filter((item) => item.delivery_status === 'pending'));
+      toast('Admin alert marked reviewed.', 'success');
+    } catch (err) {
+      toast('Could not update admin alert: ' + (err?.message || 'Unknown error'), 'error');
+    } finally {
+      setBusyId('');
+    }
+  };
+
+  const handleMonitoringTest = () => {
+    const sent = sendMonitoringTestEvent({ area: 'admin_beta_operations' });
+    toast(
+      sent
+        ? 'Monitoring test event sent. Confirm it in Sentry with production release tags.'
+        : 'Sentry is not initialized in this environment.',
+      sent ? 'success' : 'warning'
+    );
+  };
+
   return (
     <section className="admin-beta-ops">
       <div className="dashboard-panel-head">
@@ -192,7 +221,43 @@ export default function AdminBetaOperations() {
             <div><strong>{waitlistSummary.specialists}</strong><span>Specialists</span></div>
           </div>
         </article>
+
+        <article className="premium-card">
+          <span className="dashboard-kicker">Admin email alerts</span>
+          <h3>{adminAlerts.length} pending</h3>
+          <p className="dashboard-muted">
+            Alerts target etchh0@gmail.com and stay here until sent or reviewed.
+          </p>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={handleMonitoringTest}>
+            Test monitoring
+          </button>
+        </article>
       </div>
+
+      <section className="premium-card admin-alerts-panel">
+        <div className="dashboard-panel-head">
+          <span className="dashboard-kicker">Operator alert outbox</span>
+          <span className="dashboard-alert-count">{adminAlerts.length}</span>
+        </div>
+        <div className="admin-table-list">
+          {adminAlerts.length === 0 ? (
+            <p className="dashboard-muted">No pending admin alerts.</p>
+          ) : adminAlerts.map((alert) => (
+            <article key={alert.id} className={`admin-list-row alert-${alert.severity}`}>
+              <div>
+                <strong>{alert.subject}</strong>
+                <span>{alert.event_type} · {alert.severity} · {formatDate(alert.created_at)}</span>
+                <em>{alert.body}</em>
+              </div>
+              <div className="admin-row-actions">
+                <button type="button" className="btn btn-secondary btn-sm" disabled={Boolean(busyId)} onClick={() => handleAlertReviewed(alert)}>
+                  Reviewed
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
 
       <div className="admin-beta-columns">
         <section className="premium-card">
