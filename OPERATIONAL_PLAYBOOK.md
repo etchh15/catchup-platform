@@ -37,6 +37,14 @@ All alerts target `etchh0@gmail.com`. Until the Supabase `admin-alert-email` Edg
 
 After production deploy, click **Test monitoring** in Operations and confirm the event appears in Sentry with the production environment and release.
 
+Automatic pause thresholds:
+
+- More than 3 open disputes
+- 5 or more high/critical abuse events in 24 hours
+- 3 or more failed critical workflows in 1 hour
+
+When these thresholds are crossed, CatchUp pauses onboarding and creates a critical admin alert.
+
 ## Pause Onboarding
 
 Use the admin Operations page emergency switch when the beta needs to slow down.
@@ -105,6 +113,36 @@ Use severity:
 - `medium`: needs review
 - `high`: restrict or pause user
 - `critical`: immediate shutdown/escalation
+
+## Account Restrictions
+
+Use the Operations page to change `profiles.account_status`:
+
+- `active`: normal account.
+- `restricted`: warning/review state; preserves history.
+- `suspended`: blocks posting jobs, sending proposals, messaging, filing disputes, replying to disputes, and uploading dispute evidence.
+
+Do not delete suspicious accounts during beta. Suspend or restrict them so agreements, disputes, messages, and evidence stay auditable.
+
+## Engineering Checks
+
+Run before a launch push:
+
+- `npm run verify`
+- `npm run smoke:supabase`
+- `CATCHUP_ADMIN_PASSWORD=... npm run test:blocking`
+
+The blocking test verifies paused onboarding, unverified proposal rejection, verified proposal acceptance, and spam rate limiting.
+
+## Backup Export
+
+Export critical records before public promotion or major cleanup:
+
+```bash
+SUPABASE_SERVICE_ROLE_KEY=... npm run backup:critical
+```
+
+The export writes timestamped JSON files under `backups/` for profiles, jobs, bids, workspace rooms, messages, disputes, admin alerts, abuse events, and waitlist signups. The `backups/` folder is intentionally git-ignored.
 
 ## Public Messaging
 

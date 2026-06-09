@@ -1,11 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  fetchAbuseEvents,
   fetchAdminAlerts,
   fetchPlatformSettings,
   fetchVerificationQueue,
   fetchWaitlistSignups,
   markAdminAlertReviewed,
+  updateAbuseEventStatus,
   updatePlatformOnboarding,
+  updateProfileAccountStatus,
   updateSpecialistVerification,
   updateWaitlistSignupStatus,
 } from '../services/supabaseService';
@@ -26,6 +29,7 @@ export default function AdminBetaOperations() {
   const [verificationQueue, setVerificationQueue] = useState([]);
   const [waitlist, setWaitlist] = useState([]);
   const [adminAlerts, setAdminAlerts] = useState([]);
+  const [abuseEvents, setAbuseEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState('');
   const [pauseReason, setPauseReason] = useState('');
@@ -41,16 +45,18 @@ export default function AdminBetaOperations() {
   const load = async () => {
     setLoading(true);
     try {
-      const [settingsData, verificationData, waitlistData, alertsData] = await Promise.all([
+      const [settingsData, verificationData, waitlistData, alertsData, abuseData] = await Promise.all([
         fetchPlatformSettings(),
         fetchVerificationQueue(),
         fetchWaitlistSignups(),
         fetchAdminAlerts({ status: 'pending', limit: 20 }),
+        fetchAbuseEvents({ status: 'open', limit: 50 }),
       ]);
       setSettings(settingsData);
       setVerificationQueue(verificationData);
       setWaitlist(waitlistData);
       setAdminAlerts(alertsData);
+      setAbuseEvents(abuseData);
       setPauseReason(settingsData?.onboarding?.reason || '');
     } catch (err) {
       toast('Could not load beta operations: ' + (err?.message || 'Unknown error'), 'error');
@@ -170,6 +176,37 @@ export default function AdminBetaOperations() {
     }
   };
 
+  const handleAbuseStatus = async (event, status) => {
+    setBusyId(`abuse-${event.id}-${status}`);
+    try {
+      const updated = await updateAbuseEventStatus(event.id, status);
+      setAbuseEvents((current) => current.map((item) => (item.id === updated.id ? updated : item)).filter((item) => item.status === 'open'));
+      toast(`Abuse event marked ${status}.`, 'success');
+    } catch (err) {
+      toast('Could not update abuse event: ' + (err?.message || 'Unknown error'), 'error');
+    } finally {
+      setBusyId('');
+    }
+  };
+
+  const handleAccountStatus = async (profile, status) => {
+    const label = profile.full_name || profile.email || 'This account';
+    setBusyId(`${profile.id}-account-${status}`);
+    try {
+      const updated = await updateProfileAccountStatus(
+        profile.id,
+        status,
+        `Operator set ${label} to ${status} from verification queue.`
+      );
+      setVerificationQueue((current) => current.map((row) => (row.id === updated.id ? { ...row, ...updated } : row)));
+      toast(`${label} marked ${status}.`, status === 'active' ? 'success' : 'warning');
+    } catch (err) {
+      toast('Could not update account status: ' + (err?.message || 'Unknown error'), 'error');
+    } finally {
+      setBusyId('');
+    }
+  };
+
   const handleMonitoringTest = () => {
     const sent = sendMonitoringTestEvent({ area: 'admin_beta_operations' });
     toast(
@@ -232,6 +269,14 @@ export default function AdminBetaOperations() {
             Test monitoring
           </button>
         </article>
+
+        <article className="premium-card">
+          <span className="dashboard-kicker">Abuse events</span>
+          <h3>{abuseEvents.length} open</h3>
+          <p className="dashboard-muted">
+            Review suspicious behavior and suspend accounts without deleting history.
+          </p>
+        </article>
       </div>
 
       <section className="premium-card admin-alerts-panel">
@@ -252,6 +297,34 @@ export default function AdminBetaOperations() {
               <div className="admin-row-actions">
                 <button type="button" className="btn btn-secondary btn-sm" disabled={Boolean(busyId)} onClick={() => handleAlertReviewed(alert)}>
                   Reviewed
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="premium-card admin-alerts-panel">
+        <div className="dashboard-panel-head">
+          <span className="dashboard-kicker">Abuse review queue</span>
+          <span className="dashboard-alert-count">{abuseEvents.length}</span>
+        </div>
+        <div className="admin-table-list">
+          {abuseEvents.length === 0 ? (
+            <p className="dashboard-muted">No open abuse events.</p>
+          ) : abuseEvents.map((event) => (
+            <article key={event.id} className={`admin-list-row alert-${event.severity}`}>
+              <div>
+                <strong>{event.event_type}</strong>
+                <span>{event.severity} · {event.target_type || 'platform'} · {formatDate(event.created_at)}</span>
+                <em>{event.notes || `Actor: ${event.actor_id || 'unknown'}`}</em>
+              </div>
+              <div className="admin-row-actions">
+                <button type="button" className="btn btn-secondary btn-sm" disabled={Boolean(busyId)} onClick={() => handleAbuseStatus(event, 'reviewing')}>
+                  Reviewing
+                </button>
+                <button type="button" className="btn btn-success btn-sm" disabled={Boolean(busyId)} onClick={() => handleAbuseStatus(event, 'resolved')}>
+                  Resolve
                 </button>
               </div>
             </article>
@@ -291,7 +364,7 @@ export default function AdminBetaOperations() {
                 <div>
                   <strong>{profile.full_name || profile.email || 'Unnamed specialist'}</strong>
                   <span>{profile.category || profile.professional_title || 'No category'} · {normalizeEgyptMarket(profile.district_tag)}</span>
-                  <em>{verificationLabels[profile.verification_status] || profile.verification_status || 'Unverified'}</em>
+                  <em>{verificationLabels[profile.verification_status] || profile.verification_status || 'Unverified'} · {profile.account_status || 'active'}</em>
                 </div>
                 <div className="admin-row-actions">
                   <button type="button" className="btn btn-success btn-sm" disabled={Boolean(busyId)} onClick={() => handleVerification(profile, 'verified')}>
@@ -300,6 +373,17 @@ export default function AdminBetaOperations() {
                   <button type="button" className="btn btn-danger btn-sm" disabled={Boolean(busyId)} onClick={() => handleVerification(profile, 'rejected')}>
                     Reject
                   </button>
+                  <button type="button" className="btn btn-secondary btn-sm" disabled={Boolean(busyId)} onClick={() => handleAccountStatus(profile, 'restricted')}>
+                    Restrict
+                  </button>
+                  <button type="button" className="btn btn-danger btn-sm" disabled={Boolean(busyId)} onClick={() => handleAccountStatus(profile, 'suspended')}>
+                    Suspend
+                  </button>
+                  {profile.account_status && profile.account_status !== 'active' && (
+                    <button type="button" className="btn btn-success btn-sm" disabled={Boolean(busyId)} onClick={() => handleAccountStatus(profile, 'active')}>
+                      Restore
+                    </button>
+                  )}
                 </div>
               </article>
             ))}

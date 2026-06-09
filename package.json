@@ -24,6 +24,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "smoke:supabase": "node scripts/smoke-test.js",
+    "test:blocking": "node scripts/test-blocking-rules.js",
+    "backup:critical": "node scripts/export-critical-data.js",
     "scan:safety": "! rg \"child_process|dangerouslySetInnerHTML|new Function|eval\\\\(\" src",
     "verify": "npm test -- --run && npm run build"
   },

@@ -285,12 +285,24 @@ export async function currentUserIsPlatformAdmin() {
 export async function fetchVerificationQueue() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, email, full_name, role, bio, district_tag, category, professional_title, job_title, phone_number, is_verified, verification_status, verification_note, verification_requested_at')
+    .select('id, email, full_name, role, bio, district_tag, category, professional_title, job_title, phone_number, is_verified, verification_status, verification_note, verification_requested_at, account_status, account_status_note')
     .in('role', ['specialist', 'SPECIALIST'])
     .in('verification_status', ['pending_verification', 'unverified', 'rejected'])
     .order('verification_requested_at', { ascending: false, nullsFirst: false })
     .limit(100);
 
+  if (error && isSchemaColumnMissing(error)) {
+    const fallback = await supabase
+      .from('profiles')
+      .select('id, email, full_name, role, bio, district_tag, category, professional_title, job_title, phone_number, is_verified, verification_status, verification_note, verification_requested_at')
+      .in('role', ['specialist', 'SPECIALIST'])
+      .in('verification_status', ['pending_verification', 'unverified', 'rejected'])
+      .order('verification_requested_at', { ascending: false, nullsFirst: false })
+      .limit(100);
+
+    if (fallback.error) throw fallback.error;
+    return (fallback.data ?? []).map((profile) => ({ ...profile, account_status: 'active', account_status_note: null }));
+  }
   if (error) throw error;
   return data ?? [];
 }
@@ -311,8 +323,60 @@ export async function updateSpecialistVerification(profileId, status, note = '')
     .from('profiles')
     .update(updates)
     .eq('id', profileId)
-    .select('id, email, full_name, role, bio, district_tag, category, professional_title, job_title, phone_number, is_verified, verification_status, verification_note, verification_requested_at')
+    .select('id, email, full_name, role, bio, district_tag, category, professional_title, job_title, phone_number, is_verified, verification_status, verification_note, verification_requested_at, account_status, account_status_note')
     .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function fetchAbuseEvents({ status = 'open', limit = 50 } = {}) {
+  let query = supabase
+    .from('abuse_events')
+    .select('id, actor_id, target_id, target_type, event_type, severity, status, notes, created_at, resolved_at')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (status && status !== 'all') {
+    query = query.eq('status', status);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function updateAbuseEventStatus(eventId, status) {
+  if (!['open', 'reviewing', 'resolved'].includes(status)) {
+    throw new Error('Unsupported abuse event status.');
+  }
+
+  const updates = {
+    status,
+    resolved_at: status === 'resolved' ? new Date().toISOString() : null,
+  };
+
+  const { data, error } = await supabase
+    .from('abuse_events')
+    .update(updates)
+    .eq('id', eventId)
+    .select('id, actor_id, target_id, target_type, event_type, severity, status, notes, created_at, resolved_at')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updateProfileAccountStatus(profileId, status, note = '') {
+  if (!['active', 'restricted', 'suspended'].includes(status)) {
+    throw new Error('Unsupported account status.');
+  }
+
+  const { data, error } = await supabase.rpc('update_profile_account_status', {
+    p_profile_id: profileId,
+    p_status: status,
+    p_note: note,
+  });
 
   if (error) throw error;
   return data;

@@ -1357,7 +1357,7 @@ button.marketplace-summary-item:hover {
 }
 
 .admin-beta-grid {
-  grid-template-columns: minmax(0, 1.25fr) repeat(2, minmax(220px, 0.7fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .admin-beta-columns {
