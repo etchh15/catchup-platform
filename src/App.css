@@ -27,8 +27,9 @@
 .nav-logo-icon {
   width: 34px;
   height: 34px;
-  background: var(--gold-dim);
-  border: 1px solid var(--gold-border);
+  background: var(--green-dim);
+  border: 1px solid var(--green-border);
+  color: var(--green);
   border-radius: 9px;
   display: flex;
   align-items: center;
@@ -206,8 +207,9 @@
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  background: var(--gold);
-  color: #0D0A04;
+  background: var(--green-dim);
+  border: 1px solid var(--green-border);
+  color: var(--green);
   font-family: var(--font-body);
   font-weight: 900;
 }
@@ -554,13 +556,28 @@
 .auth-logo {
   width: 42px;
   height: 42px;
-  background: var(--gold-dim);
-  border: 1px solid var(--gold-border);
+  background: var(--green-dim);
+  border: 1px solid var(--green-border);
+  color: var(--green);
   border-radius: 13px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 18px;
+}
+
+.identity-brand-mark {
+  width: 52px;
+  height: 52px;
+  background: var(--green-dim);
+  border: 1px solid var(--green-border);
+  color: var(--green);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  margin: 0 auto 24px;
 }
 
 .auth-hero-copy {

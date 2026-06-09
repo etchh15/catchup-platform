@@ -4,7 +4,7 @@ export default function IdentitySelection({ onSelectComplete, isLoading }) {
   return (
     <div className="identity-screen">
       <div className="identity-card">
-        <div style={{ width: 52, height: 52, background: 'var(--gold-dim)', border: '1px solid var(--gold-border)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, margin: '0 auto 24px' }}>⚡</div>
+        <div className="identity-brand-mark">⚡</div>
 
         <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 600, color: 'var(--text)', marginBottom: 8, letterSpacing: '-0.02em' }}>
           How will you use CatchUp?
