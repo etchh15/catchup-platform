@@ -1,9 +1,13 @@
 import React from 'react';
+import { clampRating } from '../utils/lifecycleInsights';
 
-export default function ReceiptPDF({ agreement, task, completion, review, dispute, onDownload, loading }) {
-  if (!agreement || !task) {
+export default function ReceiptPDF({ agreement, task, completion, review, dispute, milestones = [], onDownload, loading }) {
+  if (!agreement || !task || agreement.loading || task.loading) {
     return null;
   }
+
+  const receiptId = agreement.id ? String(agreement.id).substring(0, 8).toUpperCase() : 'PENDING';
+  const safeReviewRating = clampRating(review?.rating_score);
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '—';
@@ -34,7 +38,7 @@ export default function ReceiptPDF({ agreement, task, completion, review, disput
         <div style={styles.logo}>🔧 CatchUp</div>
         <div style={styles.headerInfo}>
           <div style={styles.title}>SERVICE AGREEMENT RECEIPT</div>
-          <div style={styles.receiptId}>ID: {agreement.id.substring(0, 8).toUpperCase()}</div>
+          <div style={styles.receiptId}>ID: {receiptId}</div>
           <div style={styles.date}>Generated: {formatDate(new Date().toISOString())}</div>
         </div>
       </div>
@@ -49,7 +53,7 @@ export default function ReceiptPDF({ agreement, task, completion, review, disput
           </div>
           <div style={styles.party}>
             <div style={styles.partyLabel}>Service Provider</div>
-            <div style={styles.partyName}>{task.specialist_id || 'Specialist'}</div>
+            <div style={styles.partyName}>{task.specialist_name || task.specialist_id || 'Specialist'}</div>
           </div>
         </div>
       </div>
@@ -131,6 +135,26 @@ export default function ReceiptPDF({ agreement, task, completion, review, disput
         </div>
       )}
 
+      {/* Milestones */}
+      {milestones && milestones.length > 0 && (
+        <div style={styles.section}>
+          <h3 style={styles.sectionTitle}>Milestone Progress</h3>
+          <table style={styles.table}>
+            <tbody>
+              {milestones
+                .slice()
+                .sort((a, b) => a.milestone_number - b.milestone_number)
+                .map((milestone) => (
+                  <tr key={milestone.id} style={styles.tableRow}>
+                    <td style={styles.tableLabel}>{`Step ${milestone.milestone_number}: ${milestone.name}`}</td>
+                    <td style={styles.tableValue}>{`${milestone.status.replace('_', ' ')}${milestone.completed_at ? ` • ${formatDate(milestone.completed_at)}` : ''}`}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {/* Review */}
       {review && (
         <div style={styles.section}>
@@ -139,7 +163,7 @@ export default function ReceiptPDF({ agreement, task, completion, review, disput
             <tbody>
               <tr style={styles.tableRow}>
                 <td style={styles.tableLabel}>Rating</td>
-                <td style={styles.tableValue}>{'⭐'.repeat(review.rating_score)} ({review.rating_score}/5)</td>
+                <td style={styles.tableValue}>{'⭐'.repeat(safeReviewRating)} ({safeReviewRating}/5)</td>
               </tr>
               {review.feedback_text && (
                 <tr style={styles.tableRow}>

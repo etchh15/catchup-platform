@@ -14,156 +14,100 @@ export async function fetchUserProfile(userId) {
   return data;
 }
 
-export async function fetchUserRole(userId) {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', userId)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data?.role ?? null;
-}
-
-export async function createUserProfile(userId, role, email, fullName) {
-  const name = fullName || email?.split('@')[0] || 'User';
-
-  // Create profile entry
-  const { data, error } = await supabase
-    .from('profiles')
-    .upsert({
-      id: userId,
-      role,
-      email,
-      full_name: name,
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-
-  // Create role-specific table entry (FKs reference profiles.id)
-  if (role === 'client') {
-    const { error: clientErr } = await supabase
-      .from('clients')
-      .upsert([{ id: userId, full_name: name, city_district: 'Tala' }]);
-    if (clientErr) throw clientErr;
-  } else if (role === 'specialist') {
-    const { error: specialistErr } = await supabase
-      .from('specialists')
-      .upsert([
-        {
-          id: userId,
-          business_name: name,
-          profession_category: 'General',
-          is_verified: false,
-        },
-      ]);
-    if (specialistErr) throw specialistErr;
+export async function createWaitlistSignup(signup) {
+  const settings = await fetchPlatformSettings();
+  if (settings?.onboarding?.paused) {
+    throw new Error(settings.onboarding.reason || 'Beta onboarding is paused right now.');
   }
 
-  return data;
-}
+  const payload = {
+    ...signup,
+    email: String(signup.email || '').toLowerCase(),
+  };
 
-export async function updateUserRole(userId, newRole) {
-  const { error } = await supabase
-    .from('profiles')
-    .update({ role: newRole })
-    .eq('id', userId);
-
-  if (error) throw error;
-}
-
-/**
- * Task Service
- */
-export async function fetchTasks(filters = {}) {
-  let query = supabase.from('tasks').select('*');
-
-  if (filters.status) {
-    query = query.eq('status', filters.status);
-  }
-  if (filters.userId) {
-    query = query.eq('user_id', filters.userId);
-  }
-  if (filters.districtFilter && filters.districtFilter !== 'all') {
-    query = query.eq('district_tag', filters.districtFilter);
-  }
-
-  const { data, error } = await query.order('created_at', { ascending: false });
-
-  if (error) throw error;
-  return data ?? [];
-}
-
-export async function fetchAllActiveTasks() {
   const { data, error } = await supabase
-    .from('tasks')
-    .select('*')
-    .not('status', 'in', '(archived,expired)')
-    .order('created_at', { ascending: false });
+    .from('waitlist_signups')
+    .insert([payload]);
 
+  if (error?.code === '23505') return { ...payload, duplicate: true };
   if (error) throw error;
-  return data ?? [];
+  return data || payload;
 }
 
-export async function createTask(taskData) {
-  const { error, data } = await supabase
-    .from('tasks')
-    .insert([taskData])
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-export async function updateTask(taskId, updates) {
-  const { error } = await supabase
-    .from('tasks')
-    .update(updates)
-    .eq('id', taskId);
-
-  if (error) throw error;
-}
-
-/**
- * Bid Service
- */
-export async function fetchAllBids() {
+export async function fetchPlatformSettings() {
   const { data, error } = await supabase
-    .from('bids')
-    .select('*, profiles!specialist_id(full_name, category, professional_title)')
-    .order('created_at', { ascending: false });
+    .from('platform_settings')
+    .select('key, value')
+    .in('key', ['onboarding']);
 
   if (error) {
-    const { data: fallback } = await supabase.from('bids').select('*').order('created_at', { ascending: false });
-    return fallback ?? [];
+    if (isSchemaColumnMissing(error) || error?.code === '42P01') {
+      return { onboarding: { paused: false, reason: '' } };
+    }
+    throw error;
   }
 
-  return data ?? [];
+  return (data || []).reduce((settings, row) => {
+    settings[row.key] = row.value || {};
+    return settings;
+  }, { onboarding: { paused: false, reason: '' } });
 }
 
-export async function fetchBidsForTask(taskId) {
+export async function updatePlatformOnboarding({ paused, reason = '' }) {
+  const value = {
+    paused: Boolean(paused),
+    reason,
+    updated_at: new Date().toISOString(),
+  };
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError) throw userError;
+
   const { data, error } = await supabase
-    .from('bids')
-    .select('*, profiles!specialist_id(full_name, category, professional_title)')
-    .eq('task_id', taskId)
-    .order('created_at', { ascending: false });
+    .from('platform_settings')
+    .upsert([{ key: 'onboarding', value, updated_at: new Date().toISOString(), updated_by: user?.id || null }], { onConflict: 'key' })
+    .select('value')
+    .single();
 
   if (error) throw error;
-  return data ?? [];
+  return data?.value || value;
 }
-
+  /**
+   * Appointments (Phase 3.2)
+   */
 export async function submitBid(bidData) {
+  const proposal = {
+    ...bidData,
+    status: 'pending',
+    expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    accepted_at: null,
+  };
+
   const { error, data } = await supabase
     .from('bids')
-    .insert([bidData])
+    .upsert([proposal], { onConflict: 'task_id,specialist_id' })
     .select()
     .single();
 
   if (error) throw error;
   return data;
+}
+
+export async function expireStaleBidRequests() {
+  const { data, error } = await supabase.rpc('expire_stale_bid_requests');
+
+  if (error) {
+    if (error?.code === '42883' || String(error?.message || '').includes('expire_stale_bid_requests')) {
+      return 0;
+    }
+    throw error;
+  }
+
+  return Number(data || 0);
 }
 
 export async function updateBidStatus(bidId, status) {
@@ -185,23 +129,374 @@ export async function acceptBid(taskId, bidId, specialistId, bidAmount) {
   if (error) throw error;
 
   const gross = Number(data?.amount ?? bidAmount ?? 0);
-  return { gross, fee: gross * 0.1, net: gross * 0.9 };
+  return { 
+    gross, 
+    fee: gross * 0.1, 
+    net: gross * 0.9,
+    agreementId: data?.agreement_id,
+    roomId: data?.room_id 
+  };
+}
+
+/**
+ * Task Service
+ */
+export async function createTask(taskData) {
+  const { data, error } = await supabase
+    .from('tasks')
+    .insert([taskData])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updateUserRole(userId, newRole) {
+  if (!['client', 'specialist'].includes(newRole)) {
+    throw new Error('Only client and specialist roles can be selected from the app.');
+  }
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({ role: newRole })
+    .eq('id', userId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updateUserProfile(userId, updates) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', userId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function uploadProfilePhoto(userId, file) {
+  if (!userId) throw new Error('User is required to upload a profile photo.');
+  if (!file) throw new Error('Choose a profile photo first.');
+  if (!String(file.type || '').startsWith('image/')) {
+    throw new Error('Profile photo must be an image file.');
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error('Profile photo must be smaller than 5MB.');
+  }
+
+  const extension = file.name?.split('.').pop()?.toLowerCase() || 'jpg';
+  const safeExtension = extension.replace(/[^a-z0-9]/g, '') || 'jpg';
+  const filePath = `${userId}/avatar-${Date.now()}.${safeExtension}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('profile-photos')
+    .upload(filePath, file, {
+      cacheControl: '3600',
+      upsert: true,
+      contentType: file.type,
+    });
+
+  if (uploadError) throw uploadError;
+
+  const { data: publicUrlData } = supabase.storage
+    .from('profile-photos')
+    .getPublicUrl(filePath);
+
+  const avatarUrl = publicUrlData?.publicUrl;
+  if (!avatarUrl) throw new Error('Could not generate profile photo URL.');
+
+  return updateUserProfile(userId, { avatar_url: avatarUrl });
+}
+
+export async function currentUserIsPlatformAdmin() {
+  const { data, error } = await supabase.rpc('current_user_is_platform_admin');
+
+  if (error) {
+    console.warn('Admin status check unavailable:', error?.message || error);
+    return false;
+  }
+
+  return Boolean(data);
+}
+
+export async function fetchVerificationQueue() {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, email, full_name, role, bio, district_tag, category, professional_title, job_title, phone_number, is_verified, verification_status, verification_note, verification_requested_at, created_at')
+    .in('role', ['specialist', 'SPECIALIST'])
+    .in('verification_status', ['pending_verification', 'unverified', 'rejected'])
+    .order('verification_requested_at', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function updateSpecialistVerification(profileId, status, note = '') {
+  if (!['unverified', 'pending_verification', 'verified', 'rejected'].includes(status)) {
+    throw new Error('Unsupported verification status.');
+  }
+
+  const updates = {
+    verification_status: status,
+    verification_note: note,
+    verification_reviewed_at: new Date().toISOString(),
+    is_verified: status === 'verified',
+  };
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .update(updates)
+    .eq('id', profileId)
+    .select('id, email, full_name, role, bio, district_tag, category, professional_title, job_title, phone_number, is_verified, verification_status, verification_note, verification_requested_at, created_at')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function fetchWaitlistSignups() {
+  const { data, error } = await supabase
+    .from('waitlist_signups')
+    .select('id, full_name, email, phone_number, city_district, requested_role, source, status, created_at')
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function updateWaitlistSignupStatus(signupId, status) {
+  const { data, error } = await supabase
+    .from('waitlist_signups')
+    .update({ status })
+    .eq('id', signupId)
+    .select('id, full_name, email, phone_number, city_district, requested_role, source, status, created_at')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function createUserProfile(userId, role = 'client', email = '', fullName = '') {
+  const { data, error } = await supabase
+    .from('profiles')
+    .insert([
+      {
+        id: userId,
+        role,
+        email,
+        full_name: fullName,
+      },
+    ])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+function isSchemaColumnMissing(error) {
+  const message = String(error?.message || '');
+  return error?.code === '42703' || message.includes('does not exist') || message.includes('Could not find');
 }
 
 /**
  * Specialist Service
  */
 export async function fetchSpecialists(filters = {}) {
-  let query = supabase.from('profiles').select('*').eq('role', 'specialist');
+  let query = supabase
+    .from('profiles')
+    .select('id, full_name, bio, district_tag, category, professional_title, job_title, portfolio_images, avatar_url, is_verified, verification_status, hourly_rate, fulfillment_types, metadata, pricing, online_hourly_rate, in_person_hourly_rate, latitude, longitude, service_radius_km')
+    .in('role', ['specialist', 'SPECIALIST']);
 
   if (filters.districtFilter && filters.districtFilter !== 'all') {
     query = query.eq('district_tag', filters.districtFilter);
   }
 
   const { data, error } = await query.order('full_name', { ascending: true });
+  if (error && isSchemaColumnMissing(error)) {
+    let fallbackQuery = supabase
+      .from('profiles')
+      .select('id, full_name, bio, district_tag, category, professional_title, job_title, portfolio_images, avatar_url, is_verified, hourly_rate')
+      .in('role', ['specialist', 'SPECIALIST']);
+
+    if (filters.districtFilter && filters.districtFilter !== 'all') {
+      fallbackQuery = fallbackQuery.eq('district_tag', filters.districtFilter);
+    }
+
+    const fallback = await fallbackQuery.order('full_name', { ascending: true });
+    if (fallback.error) throw fallback.error;
+    return (fallback.data ?? []).map((specialist) => ({
+      ...specialist,
+      verification_status: specialist.is_verified ? 'verified' : 'unverified',
+    }));
+  }
 
   if (error) throw error;
   return data ?? [];
+}
+
+async function fetchProfilesByIds(ids = []) {
+  const uniqueIds = Array.from(new Set(ids.filter(Boolean).map(String)));
+  if (uniqueIds.length === 0) return {};
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, avatar_url, is_verified, district_tag')
+    .in('id', uniqueIds);
+
+  if (error) throw error;
+  return (data || []).reduce((profilesById, profile) => {
+    profilesById[String(profile.id)] = profile;
+    return profilesById;
+  }, {});
+}
+
+async function attachTaskProfiles(tasks = []) {
+  const rows = Array.isArray(tasks) ? tasks : [tasks].filter(Boolean);
+  const profilesById = await fetchProfilesByIds(
+    rows.flatMap((task) => [task.user_id, task.specialist_id])
+  );
+
+  const enriched = rows.map((task) => ({
+    ...task,
+    client: profilesById[String(task.user_id)] || task.client || null,
+    assigned_specialist: profilesById[String(task.specialist_id)] || task.assigned_specialist || null,
+  }));
+
+  return Array.isArray(tasks) ? enriched : enriched[0] || null;
+}
+
+async function attachWorkspaceRoomProfiles(rooms = []) {
+  const rows = Array.isArray(rooms) ? rooms : [rooms].filter(Boolean);
+  const profilesById = await fetchProfilesByIds(
+    rows.flatMap((room) => [room.client_id, room.specialist_id])
+  );
+
+  const enriched = rows.map((room) => ({
+    ...room,
+    tasks: room.tasks
+      ? {
+          ...room.tasks,
+          client: profilesById[String(room.client_id)] || room.tasks.client || null,
+          assigned_specialist: profilesById[String(room.specialist_id)] || room.tasks.assigned_specialist || null,
+        }
+      : room.tasks,
+  }));
+
+  return Array.isArray(rooms) ? enriched : enriched[0] || null;
+}
+
+async function attachBidProfiles(bids = []) {
+  const rows = Array.isArray(bids) ? bids : [bids].filter(Boolean);
+  const profilesById = await fetchProfilesByIds(rows.map((bid) => bid.specialist_id));
+
+  const enriched = rows.map((bid) => ({
+    ...bid,
+    profiles: profilesById[String(bid.specialist_id)] || bid.profiles || null,
+  }));
+
+  return Array.isArray(bids) ? enriched : enriched[0] || null;
+}
+
+export async function fetchAllActiveTasks() {
+  await expireStaleBidRequests();
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('id, user_id, client_name, title, description, budget, category, district_tag, specialist_id, status, payment_status, payment_note, work_delivered_at, confirmed_by_client_at, created_at, updated_at')
+    .not('status', 'eq', 'archived')
+    .order('created_at', { ascending: false })
+    .limit(200);
+
+  if (error && isSchemaColumnMissing(error)) {
+    const fallback = await supabase
+      .from('tasks')
+      .select('id, user_id, client_name, title, description, budget, category, district_tag, specialist_id, status, work_delivered_at, confirmed_by_client_at, created_at, updated_at')
+      .not('status', 'eq', 'archived')
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    if (fallback.error) throw fallback.error;
+    return attachTaskProfiles((fallback.data ?? []).map((task) => ({
+      ...task,
+      payment_status: 'unpaid',
+      payment_note: null,
+    })));
+  }
+
+  if (error) throw error;
+  return attachTaskProfiles(data ?? []);
+}
+
+export async function fetchTaskById(taskId) {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('id, user_id, client_name, title, description, budget, category, district_tag, specialist_id, status, payment_status, payment_note, work_delivered_at, confirmed_by_client_at, created_at, updated_at')
+    .eq('id', taskId)
+    .maybeSingle();
+
+  if (error && isSchemaColumnMissing(error)) {
+    const fallback = await supabase
+      .from('tasks')
+      .select('id, user_id, client_name, title, description, budget, category, district_tag, specialist_id, status, work_delivered_at, confirmed_by_client_at, created_at, updated_at')
+      .eq('id', taskId)
+      .maybeSingle();
+
+    if (fallback.error) throw fallback.error;
+    return fallback.data ? attachTaskProfiles({
+      ...fallback.data,
+      payment_status: 'unpaid',
+      payment_note: null,
+    }) : null;
+  }
+
+  if (error) throw error;
+  return data ? attachTaskProfiles(data) : null;
+}
+
+export async function fetchAllBids() {
+  return fetchMarketplaceBids();
+}
+
+export async function fetchMarketplaceBids({ userId = null, role = null } = {}) {
+  await expireStaleBidRequests();
+
+  let query = supabase
+    .from('bids')
+    .select('id, task_id, specialist_id, amount, note, status, created_at, expires_at, accepted_at')
+    .order('created_at', { ascending: false })
+    .limit(500);
+
+  if (userId && role === 'specialist') {
+    query = query.eq('specialist_id', userId);
+  } else if (userId && role === 'client') {
+    const { data: ownedTasks, error: taskError } = await supabase
+      .from('tasks')
+      .select('id')
+      .eq('user_id', userId)
+      .limit(500);
+
+    if (taskError) throw taskError;
+    const taskIds = (ownedTasks || []).map((task) => task.id);
+    if (taskIds.length === 0) return [];
+    query = query.in('task_id', taskIds);
+  } else {
+    return [];
+  }
+
+  const { data, error } = await query;
+
+  if (error) throw error;
+  return attachBidProfiles(data ?? []);
 }
 
 /**
@@ -210,22 +505,102 @@ export async function fetchSpecialists(filters = {}) {
 export async function fetchWorkspaceRoomsForUser(userId) {
   const { data, error } = await supabase
     .from('workspace_rooms')
-    .select('id, status, created_at, task_id, client_id, specialist_id, tasks(title, budget)')
-    .or(`client_id.eq.${userId},specialist_id.eq.${userId}`);
+    .select('id, status, created_at, task_id, client_id, specialist_id, tasks(title, budget, category, district_tag)')
+    .or(`client_id.eq.${userId},specialist_id.eq.${userId}`)
+    .order('created_at', { ascending: false });
 
   if (error) throw error;
-  return data ?? [];
+  return attachWorkspaceRoomProfiles(data ?? []);
 }
 
 export async function fetchWorkspaceRoom(roomId) {
   const { data, error } = await supabase
     .from('workspace_rooms')
-    .select('id, status, created_at, task_id, client_id, specialist_id, tasks(title, budget)')
+    .select('id, status, created_at, task_id, client_id, specialist_id, tasks(title, budget, category, district_tag)')
     .eq('id', roomId)
     .single();
 
   if (error) throw error;
-  return data;
+  return attachWorkspaceRoomProfiles(data);
+}
+
+export async function fetchWorkspaceRoomByTask(taskId) {
+  const { data, error } = await supabase
+    .from('workspace_rooms')
+    .select('id, status, created_at, task_id, client_id, specialist_id, tasks(title, budget, category, district_tag)')
+    .eq('task_id', taskId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? attachWorkspaceRoomProfiles(data) : null;
+}
+
+async function countRows(table, applyFilters = (query) => query) {
+  const query = applyFilters(
+    supabase.from(table).select('id', { count: 'exact', head: true })
+  );
+  const { count, error } = await query;
+  if (error) throw error;
+  return count || 0;
+}
+
+export async function fetchAdminEmergencySignals() {
+  const safeCount = async (label, loader) => {
+    try {
+      return await loader();
+    } catch (error) {
+      console.warn(`Admin emergency signal unavailable: ${label}`, error?.message || error);
+      return null;
+    }
+  };
+
+  const [
+    openDisputes,
+    activeRooms,
+    staleOpenTasks,
+    pendingVerification,
+    betaWaitlist,
+    openAbuseEvents,
+    unpaidAcceptedWork,
+  ] = await Promise.all([
+    safeCount('open disputes', () => countRows('disputes', (query) => query.in('status', ['open', 'under_review']))),
+    safeCount('active rooms', () => countRows('workspace_rooms', (query) => query.eq('status', 'active'))),
+    safeCount('stale open tasks', () => {
+      const staleDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      return countRows('tasks', (query) => query.eq('status', 'open').lt('created_at', staleDate));
+    }),
+    safeCount('pending verification', () => countRows('profiles', (query) => query.eq('verification_status', 'pending_verification'))),
+    safeCount('waitlist', () => countRows('waitlist_signups')),
+    safeCount('abuse events', () => countRows('abuse_events', (query) => query.eq('status', 'open'))),
+    safeCount('unpaid accepted work', () => countRows('tasks', (query) => query.in('status', ['active', 'completed']).eq('payment_status', 'unpaid'))),
+  ]);
+
+  return {
+    openDisputes,
+    activeRooms,
+    staleOpenTasks,
+    pendingVerification,
+    betaWaitlist,
+    openAbuseEvents,
+    unpaidAcceptedWork,
+  };
+}
+
+export async function cancelTask(taskId, userId) {
+  const updates = {
+    status: 'archived',
+  };
+
+  const { error } = await supabase
+    .from('tasks')
+    .update(updates)
+    .eq('id', taskId)
+    .eq('user_id', userId)
+    .eq('status', 'open');
+
+  if (error) throw error;
 }
 
 export async function updateWorkspaceRoomStatus(roomId, status, disputeData = null) {
@@ -257,13 +632,176 @@ export async function fetchWorkspaceMessages(roomId) {
   return data ?? [];
 }
 
-export async function sendWorkspaceMessage(roomId, senderId, messageText) {
-  const { error, data } = await supabase
-    .from('workspace_messages')
+export async function resolveWorkspaceChatRoomId(roomId, taskId = null) {
+  const { data, error } = await supabase
+    .rpc('resolve_workspace_chat_room_id', {
+      p_room_identifier: roomId ? String(roomId) : null,
+      p_task_identifier: taskId ? String(taskId) : null,
+    });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function fetchWorkspaceChatMessages(roomId, taskId = null) {
+  const { data, error } = await supabase
+    .rpc('fetch_workspace_chat_messages', {
+      p_room_identifier: roomId ? String(roomId) : null,
+      p_task_identifier: taskId ? String(taskId) : null,
+    });
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+const uuidRe = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+async function resolveWorkspaceRoomId(roomId, senderId, taskId = null) {
+  const normalizedRoomId = String(roomId).trim();
+  if (normalizedRoomId.match(uuidRe)) return normalizedRoomId;
+
+  // 1. Fallback to scanning the current user's workspace rooms in client-side memory.
+  // This avoids sending numeric legacy identifiers into UUID-typed filters.
+  const { data: candidateRooms, error: candidateError } = await supabase
+    .from('workspace_rooms')
+    .select('id, task_id')
+    .or(`client_id.eq.${senderId},specialist_id.eq.${senderId}`);
+
+  if (!candidateError && Array.isArray(candidateRooms)) {
+    const match = candidateRooms.find((room) =>
+      String(room.id) === normalizedRoomId ||
+      String(room.task_id) === normalizedRoomId ||
+      (taskId && String(room.task_id) === String(taskId))
+    );
+    if (match?.id && String(match.id).match(uuidRe)) return match.id;
+  }
+
+  // 2. Try UUID task lookup only when the identifier is safe for UUID-typed schemas.
+  const safeTaskId = taskId && String(taskId).match(uuidRe) ? String(taskId) : null;
+  const { data: roomByTask, error: taskLookupError } = safeTaskId ? await supabase
+    .from('workspace_rooms')
+    .select('id')
+    .eq('task_id', safeTaskId)
+    .limit(1)
+    .maybeSingle() : { data: null, error: null };
+
+  if (!taskLookupError && roomByTask?.id && String(roomByTask.id).match(uuidRe)) {
+    return roomByTask.id;
+  }
+
+  // 3. Try direct room lookup only for UUID identifiers.
+  const { data: roomById, error: idLookupError } = normalizedRoomId.match(uuidRe) ? await supabase
+    .from('workspace_rooms')
+    .select('id')
+    .eq('id', normalizedRoomId)
+    .limit(1)
+    .maybeSingle() : { data: null, error: null };
+
+  if (!idLookupError && roomById?.id && String(roomById.id).match(uuidRe)) {
+    return roomById.id;
+  }
+
+  console.warn('sendWorkspaceMessage: could not resolve workspace room id', {
+    roomId: normalizedRoomId,
+    taskId,
+    candidateError,
+    taskLookupError,
+    idLookupError,
+  });
+  throw new Error('This workspace uses a legacy room identifier. Please refresh the workspace and try again.');
+}
+
+export async function sendWorkspaceMessage(roomId, senderId, messageText, taskId = null) {
+  const { data: rpcData, error: rpcError } = await supabase
+    .rpc('send_workspace_message', {
+      p_room_identifier: roomId ? String(roomId) : null,
+      p_task_identifier: taskId ? String(taskId) : null,
+      p_message_text: messageText,
+    });
+
+  if (!rpcError) return rpcData;
+  if (rpcError?.code !== '42883' && !String(rpcError?.message || '').includes('send_workspace_message')) {
+    throw rpcError;
+  }
+
+  throw new Error('Workspace messaging is not available because the required database RPC is missing.');
+}
+
+/**
+ * Reviews & Ratings
+ */
+export async function submitReview(reviewData) {
+  const { data: rpcData, error: rpcError } = await supabase.rpc('submit_task_review', {
+    p_room_id: reviewData.room_id ? String(reviewData.room_id) : null,
+    p_task_id: String(reviewData.task_id),
+    p_specialist_id: String(reviewData.specialist_id),
+    p_rating_score: Number(reviewData.rating_score),
+    p_feedback_text: reviewData.feedback_text || null,
+  });
+
+  if (!rpcError) return rpcData;
+  if (rpcError?.code !== '42883' && !String(rpcError?.message || '').includes('submit_task_review')) {
+    throw rpcError;
+  }
+
+  throw new Error('Review submission is not available because the required database RPC is missing.');
+}
+
+export async function fetchReviewByTaskId(taskId) {
+  const { data, error } = await supabase
+    .from('reviews')
+    .select('*')
+    .eq('task_id', taskId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function fetchWorkspaceReview({
+  roomId = null,
+  taskId = null,
+  clientId = null,
+  specialistId = null,
+} = {}) {
+  const { data: rpcData, error: rpcError } = await supabase.rpc('fetch_workspace_review', {
+    p_room_id: roomId ? String(roomId) : null,
+    p_task_id: taskId ? String(taskId) : null,
+    p_client_id: clientId ? String(clientId) : null,
+    p_specialist_id: specialistId ? String(specialistId) : null,
+  });
+
+  if (!rpcError) return rpcData;
+  if (rpcError?.code !== '42883' && !String(rpcError?.message || '').includes('fetch_workspace_review')) {
+    throw rpcError;
+  }
+
+  if (taskId) return fetchReviewByTaskId(taskId);
+  return null;
+}
+
+export async function createCompletionReceipt({ taskId, agreementId = null, receiptType, note = '' }) {
+  const { data: rpcData, error: rpcError } = await supabase.rpc('ensure_completion_receipt', {
+    p_task_id: taskId ? String(taskId) : null,
+    p_agreement_id: agreementId ? String(agreementId) : null,
+    p_receipt_type: receiptType || 'service_agreement',
+    p_note: note || null,
+  });
+
+  if (!rpcError) return rpcData;
+  if (rpcError?.code !== '42883' && !String(rpcError?.message || '').includes('ensure_completion_receipt')) {
+    throw rpcError;
+  }
+
+  const { data, error } = await supabase
+    .from('completion_receipts')
     .insert([{
-      room_id: roomId,
-      sender_id: senderId,
-      message_text: messageText,
+      task_id: taskId,
+      agreement_id: agreementId || null,
+      receipt_type: receiptType || 'service_agreement',
+      note,
     }])
     .select()
     .single();
@@ -272,15 +810,25 @@ export async function sendWorkspaceMessage(roomId, senderId, messageText) {
   return data;
 }
 
-/**
- * Reviews & Ratings
- */
-export async function submitReview(reviewData) {
-  const { error, data } = await supabase
-    .from('reviews')
-    .insert([reviewData])
-    .select()
-    .single();
+export async function fetchCompletionReceipt(taskId, receiptType = 'service_agreement') {
+  const { data: rpcData, error: rpcError } = await supabase.rpc('fetch_completion_receipt', {
+    p_task_id: taskId ? String(taskId) : null,
+    p_receipt_type: receiptType || 'service_agreement',
+  });
+
+  if (!rpcError) return rpcData;
+  if (rpcError?.code !== '42883' && !String(rpcError?.message || '').includes('fetch_completion_receipt')) {
+    throw rpcError;
+  }
+
+  const { data, error } = await supabase
+    .from('completion_receipts')
+    .select('*')
+    .eq('task_id', taskId)
+    .eq('receipt_type', receiptType || 'service_agreement')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   if (error) throw error;
   return data;
@@ -391,6 +939,22 @@ export async function updateNotificationPreferences(userId, preferences) {
   if (error) throw error;
 }
 
+export async function createNotification(recipientId, senderId, type, title, message, actionUrl = null, taskId = null) {
+  const { data, error } = await supabase
+    .rpc('create_app_notification', {
+      p_recipient_id: recipientId,
+      p_sender_id: senderId,
+      p_type: type,
+      p_title: title,
+      p_message: message,
+      p_action_url: actionUrl,
+      p_task_id: taskId,
+    });
+
+  if (error) throw error;
+  return data;
+}
+
 export async function markNotificationAsRead(notificationId) {
   const { error } = await supabase
     .from('notifications')
@@ -482,7 +1046,7 @@ export async function fetchMultipleSpecialistReputations(specialistIds) {
 }
 
 export async function calculateSpecialistReputation(specialistId) {
-  const { error } = await supabase.rpc('calculate_specialist_reputation', {
+  const { error } = await supabase.rpc('recalculate_specialist_reputation', {
     p_specialist_id: specialistId,
   });
 
@@ -522,213 +1086,28 @@ export async function logContactAccess(viewerId, targetId, roomId) {
 /**
  * Agreement Service (Phase 2.1)
  */
-export async function fetchOrCreateAgreement(taskId, specialistId, clientId, amount, proposalNote) {
-  // Check if agreement already exists
-  const { data: existing, error: fetchError } = await supabase
-    .from('agreements')
-    .select('*')
-    .eq('task_id', taskId)
-    .maybeSingle();
-
-  if (fetchError && fetchError.code !== 'PGRST116') throw fetchError;
-  if (existing) return existing;
-
-  // Create new agreement
-  const expectedDeliveryDate = new Date();
-  expectedDeliveryDate.setDate(expectedDeliveryDate.getDate() + 7);
-
-  const { data, error } = await supabase
-    .from('agreements')
-    .insert([
-      {
-        task_id: taskId,
-        specialist_id: specialistId,
-        client_id: clientId,
-        agreed_amount: amount,
-        proposal_note: proposalNote,
-        expected_delivery_date: expectedDeliveryDate.toISOString().split('T')[0],
-      },
-    ])
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-export async function fetchAgreement(agreementId) {
-  const { data, error } = await supabase
-    .from('agreements')
-    .select('*')
-    .eq('id', agreementId)
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-export async function updateAgreement(agreementId, updates) {
-  const { data, error } = await supabase
-    .from('agreements')
-    .update({
-      ...updates,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', agreementId)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
 
 /**
  * Completion Confirmation Service (Phase 2.2)
  */
-export async function markWorkDelivered(taskId, specialistId, message) {
-  const { error: updateError } = await supabase
-    .from('tasks')
-    .update({
-      work_delivered_by: specialistId,
-      work_delivered_at: new Date().toISOString(),
-    })
-    .eq('id', taskId);
-
-  if (updateError) throw updateError;
-
-  // Log action
-  const { error: logError } = await supabase
-    .from('completion_log')
-    .insert([
-      {
-        task_id: taskId,
-        action: 'work_delivered',
-        actor_id: specialistId,
-        message,
-      },
-    ]);
-
-  if (logError) console.warn('Failed to log work delivery:', logError);
-}
-
-export async function confirmWorkCompleted(taskId, clientId, message) {
-  const { error: updateError } = await supabase
-    .from('tasks')
-    .update({
-      confirmed_by_client: clientId,
-      confirmed_by_client_at: new Date().toISOString(),
-      status: 'completed',
-    })
-    .eq('id', taskId);
-
-  if (updateError) throw updateError;
-
-  // Log action
-  const { error: logError } = await supabase
-    .from('completion_log')
-    .insert([
-      {
-        task_id: taskId,
-        action: 'work_confirmed',
-        actor_id: clientId,
-        message,
-      },
-    ]);
-
-  if (logError) console.warn('Failed to log work confirmation:', logError);
-}
-
-export async function fetchCompletionLog(taskId) {
-  const { data, error } = await supabase
-    .from('completion_log')
-    .select('*')
-    .eq('task_id', taskId)
-    .order('created_at', { ascending: false });
-
-  if (error) throw error;
-  return data || [];
-}
 
 /**
  * Dispute Evidence Service (Phase 2.3)
  */
-export async function fileDispute(taskId, reason, reasonCategory, messageId) {
-  // Create dispute (assumes disputes table exists from original schema)
-  const { data, error } = await supabase
-    .from('disputes')
-    .insert([
-      {
-        task_id: taskId,
-        reason,
-        reason_category: reasonCategory,
-        referenced_message_id: messageId,
-      },
-    ])
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-export async function uploadDisputeEvidence(disputeId, files) {
-  const uploadedEvidence = [];
-
-  for (const file of files) {
-    const filename = `${Date.now()}-${file.name}`;
-    const filePath = `disputes/${disputeId}/${filename}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('public')
-      .upload(filePath, file, { upsert: false });
-
-    if (uploadError) throw uploadError;
-
-    const { data } = supabase.storage.from('public').getPublicUrl(filePath);
-    uploadedEvidence.push({
-      type: 'image',
-      url: data.publicUrl,
-      uploaded_at: new Date().toISOString(),
-    });
-  }
-
-  // Update dispute with evidence
-  const { error: updateError } = await supabase
-    .from('disputes')
-    .update({
-      evidence: uploadedEvidence,
-    })
-    .eq('id', disputeId);
-
-  if (updateError) throw updateError;
-  return uploadedEvidence;
-}
-
-export async function respondToDispute(disputeId, responderId, message, evidence) {
-  const { data, error } = await supabase
-    .from('dispute_responses')
-    .insert([
-      {
-        dispute_id: disputeId,
-        responder_id: responderId,
-        message,
-        evidence: evidence || null,
-      },
-    ])
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
 export async function resolveDispute(disputeId, resolution, adminId, amount) {
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError) throw userError;
+
   const { data, error } = await supabase
     .from('dispute_resolutions')
     .insert([
       {
         dispute_id: disputeId,
-        resolved_by_admin_id: adminId,
+        resolved_by_admin_id: adminId || user?.id,
         resolution,
         amount,
         resolved_at: new Date().toISOString(),
@@ -741,151 +1120,21 @@ export async function resolveDispute(disputeId, resolution, adminId, amount) {
   return data;
 }
 
-/**
- * Milestone Service (Phase 3.1)
- */
-export async function createMilestones(agreementId) {
-  const milestones = [
-    { milestone_number: 1, name: 'Request Confirmed', description: 'Initial task posted' },
-    { milestone_number: 2, name: 'Work Scheduled', description: 'Appointment confirmed' },
-    { milestone_number: 3, name: 'Work Started', description: 'Specialist begins service' },
-    { milestone_number: 4, name: 'Client Inspected', description: 'Client reviews quality' },
-    { milestone_number: 5, name: 'Completed', description: 'Both parties agree work is done' },
-  ];
-
-  const { error } = await supabase
-    .from('agreement_milestones')
-    .insert(
-      milestones.map(m => ({
-        agreement_id: agreementId,
-        ...m,
-        status: 'pending',
-      }))
-    );
-
-  if (error) throw error;
-
-  // Auto-complete milestone 1
-  await supabase
-    .from('agreement_milestones')
-    .update({ status: 'completed', completed_at: new Date().toISOString() })
-    .eq('agreement_id', agreementId)
-    .eq('milestone_number', 1);
-}
-
-export async function completeMilestone(milestoneId, completedBy, notes) {
-  const { error } = await supabase
-    .from('agreement_milestones')
-    .update({
-      status: 'completed',
-      completed_by: completedBy,
-      completed_at: new Date().toISOString(),
-      notes,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', milestoneId);
-
-  if (error) throw error;
-}
-
-export async function fetchMilestones(agreementId) {
+export async function fetchOpenDisputesForAdmin() {
   const { data, error } = await supabase
-    .from('agreement_milestones')
-    .select('*')
-    .eq('agreement_id', agreementId)
-    .order('milestone_number', { ascending: true });
+    .from('disputes')
+    .select('id, task_id, filed_by, reason, reason_category, evidence, status, created_at, updated_at, tasks(id, title, budget, user_id, specialist_id, status)')
+    .eq('status', 'open')
+    .order('created_at', { ascending: false });
 
   if (error) throw error;
-  return data || [];
+  return data ?? [];
 }
 
 /**
  * Appointment Service (Phase 3.2)
  */
-export async function proposeAppointment(taskId, agreementId, proposedDate, address, proposedBy) {
-  const { data, error } = await supabase
-    .from('appointments')
-    .insert([
-      {
-        task_id: taskId,
-        agreement_id: agreementId,
-        proposed_date: proposedDate,
-        proposed_by: proposedBy,
-        service_address: address,
-        status: 'pending',
-      },
-    ])
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-export async function confirmAppointment(appointmentId, confirmedBy) {
-  const { data, error } = await supabase
-    .from('appointments')
-    .update({
-      status: 'confirmed',
-      confirmed_by: confirmedBy,
-      confirmed_date: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', appointmentId)
-    .select()
-    .single();
-
-  if (error) throw error;
-
-  // Auto-complete milestone 2
-  if (data.agreement_id) {
-    await supabase
-      .from('agreement_milestones')
-      .update({ status: 'completed', completed_at: new Date().toISOString() })
-      .eq('agreement_id', data.agreement_id)
-      .eq('milestone_number', 2);
-  }
-
-  return data;
-}
-
-export async function counterProposeAppointment(appointmentId, newDate) {
-  const { data, error } = await supabase
-    .from('appointments')
-    .update({
-      proposed_date: newDate,
-      status: 'rescheduled',
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', appointmentId)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-export async function fetchAppointment(appointmentId) {
-  const { data, error } = await supabase
-    .from('appointments')
-    .select('*')
-    .eq('id', appointmentId)
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-export async function fetchTaskAppointment(taskId) {
-  const { data, error } = await supabase
-    .from('appointments')
-    .select('*')
-    .eq('task_id', taskId)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data;
-}
+/* Appointments consolidated later in file */
 
 /**
  * Client Reputation Service (Phase 3.3)
@@ -918,59 +1167,44 @@ export async function fetchClientReputation(clientId) {
   return data;
 }
 
-export async function rateClient(specialistId, clientId, taskId, rating, comment) {
-  const { data, error } = await supabase
+export async function fetchSpecialistRatings(specialistId, taskIds = []) {
+  let query = supabase
     .from('specialist_client_ratings')
-    .insert([
-      {
-        specialist_id: specialistId,
-        client_id: clientId,
-        task_id: taskId,
-        rating,
-        comment,
-      },
-    ])
-    .select()
-    .single();
+    .select('*')
+    .eq('specialist_id', specialistId);
+
+  if (Array.isArray(taskIds) && taskIds.length > 0) {
+    query = query.in('task_id', taskIds);
+  }
+
+  const { data, error } = await query.order('submitted_at', { ascending: false });
 
   if (error) throw error;
+  return data ?? [];
+}
 
-  // Trigger client reputation calculation
-  await calculateClientReputation(clientId);
-  return data;
+export async function rateClient(specialistId, clientId, taskId, rating, comment) {
+  const { data: rpcData, error: rpcError } = await supabase
+    .rpc('rate_client_after_completion', {
+      p_task_id: taskId,
+      p_rating: Number(rating),
+      p_comment: comment || null,
+    });
+
+  if (!rpcError) return rpcData;
+  if (rpcError?.code !== '42883' && !String(rpcError?.message || '').includes('rate_client_after_completion')) {
+    throw rpcError;
+  }
+
+  throw new Error('Client review submission is not available because the required database RPC is missing.');
 }
 
 export async function calculateClientReputation(clientId) {
-  // This would normally be a database function/trigger
-  // For now, fetch fresh data from specialist_client_ratings
-  const { data: ratings, error: ratingsError } = await supabase
-    .from('specialist_client_ratings')
-    .select('rating')
-    .eq('client_id', clientId);
+  const { error } = await supabase.rpc('recalculate_client_reputation', {
+    p_client_id: clientId,
+  });
 
-  if (ratingsError) {
-    console.warn('Failed to calculate client reputation:', ratingsError);
-    return;
-  }
-
-  const avgRating = ratings && ratings.length > 0
-    ? (ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length).toFixed(1)
-    : 0;
-
-  // Update or create client reputation record
-  const { error: updateError } = await supabase
-    .from('client_reputation')
-    .upsert(
-      {
-        client_id: clientId,
-        average_rating_from_specialists: parseFloat(avgRating),
-        total_ratings_given: ratings?.length || 0,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'client_id' }
-    );
-
-  if (updateError) console.warn('Failed to update client reputation:', updateError);
+  if (error) throw error;
 }
 
 /**
@@ -1067,15 +1301,30 @@ export function subscribeToAgreement(taskId, callback) {
  * Completion & Delivery (Phase 2.2)
  */
 export async function markWorkDelivered(taskId, specialistId, message = '') {
-  const { error: updateError } = await supabase
-    .from('tasks')
-    .update({
-      work_delivered_by: specialistId,
-      work_delivered_at: new Date().toISOString(),
-    })
-    .eq('id', taskId);
+  const { data: rpcData, error: rpcError } = await supabase
+    .rpc('mark_task_work_delivered', {
+      p_task_id: taskId,
+      p_message: message || null,
+    });
 
-  if (updateError) throw updateError;
+  let deliveredTask = rpcData;
+  if (rpcError) {
+    if (rpcError?.code !== '42883' && !String(rpcError?.message || '').includes('mark_task_work_delivered')) {
+      throw rpcError;
+    }
+
+    const { error: updateError } = await supabase
+      .from('tasks')
+      .update({
+        work_delivered_by: specialistId,
+        work_delivered_at: new Date().toISOString(),
+      })
+      .eq('id', taskId)
+      .eq('specialist_id', specialistId);
+
+    if (updateError) throw updateError;
+    deliveredTask = await fetchTaskById(taskId);
+  }
 
   // Log in completion log
   const { error: logError } = await supabase
@@ -1089,33 +1338,39 @@ export async function markWorkDelivered(taskId, specialistId, message = '') {
       },
     ]);
 
-  if (logError) throw logError;
+  if (logError) console.warn('Failed to write delivery log:', logError);
 
   // Create notification for client
-  const task = await fetchTaskById(taskId);
+  const task = deliveredTask || await fetchTaskById(taskId);
   if (task?.user_id) {
     await createNotification(
       task.user_id,
       specialistId,
       'work_delivered',
       `Work on "${task.title}" has been delivered and is ready for inspection`,
+      message || 'Work has been delivered and is ready for inspection.',
       `/workspace/${task.id}`,
       taskId
     );
   }
+
+  return task;
 }
 
 export async function confirmWorkCompleted(taskId, clientId, message = '') {
-  const { error: updateError } = await supabase
-    .from('tasks')
-    .update({
-      confirmed_by_client: clientId,
-      confirmed_by_client_at: new Date().toISOString(),
-      status: 'completed',
-    })
-    .eq('id', taskId);
+  const { data: rpcData, error: rpcError } = await supabase
+    .rpc('confirm_task_work_completed', {
+      p_task_id: taskId,
+      p_message: message || null,
+    });
 
-  if (updateError) throw updateError;
+  let completedTask = rpcData;
+  if (rpcError) {
+    if (rpcError?.code !== '42883' && !String(rpcError?.message || '').includes('confirm_task_work_completed')) {
+      throw rpcError;
+    }
+    throw new Error('Completion confirmation is not available because the required database RPC is missing.');
+  }
 
   // Log in completion log
   const { error: logError } = await supabase
@@ -1129,20 +1384,23 @@ export async function confirmWorkCompleted(taskId, clientId, message = '') {
       },
     ]);
 
-  if (logError) throw logError;
+  if (logError) console.warn('Failed to write completion log:', logError);
 
   // Create notification for specialist
-  const task = await fetchTaskById(taskId);
+  const task = completedTask || await fetchTaskById(taskId);
   if (task?.specialist_id) {
     await createNotification(
       task.specialist_id,
       clientId,
       'task_completed',
       `Your work on "${task.title}" has been confirmed as complete!`,
+      message || 'The client confirmed the work as complete.',
       `/workspace/${task.id}`,
       taskId
     );
   }
+
+  return task;
 }
 
 export async function fetchCompletionLog(taskId) {
@@ -1161,19 +1419,12 @@ export async function fetchCompletionLog(taskId) {
  */
 export async function fileDispute(taskId, reason, reasonCategory, messageId = null) {
   const { data, error } = await supabase
-    .from('disputes')
-    .insert([
-      {
-        task_id: taskId,
-        filed_by: (await supabase.auth.getUser()).data.user?.id,
-        reason,
-        reason_category: reasonCategory,
-        referenced_message_id: messageId,
-        status: 'open',
-      },
-    ])
-    .select()
-    .single();
+    .rpc('file_task_dispute', {
+      p_task_id: taskId,
+      p_reason: reason,
+      p_reason_category: reasonCategory,
+      p_referenced_message_id: messageId,
+    });
 
   if (error) throw error;
   return data;
@@ -1208,11 +1459,10 @@ export async function uploadDisputeEvidence(disputeId, files) {
 
   const existingEvidence = dispute?.evidence || [];
   const { error: updateError } = await supabase
-    .from('disputes')
-    .update({
-      evidence: [...existingEvidence, ...uploadedEvidence],
-    })
-    .eq('id', disputeId);
+    .rpc('append_dispute_evidence', {
+      p_dispute_id: disputeId,
+      p_evidence: [...existingEvidence, ...uploadedEvidence],
+    });
 
   if (updateError) throw updateError;
   return uploadedEvidence;
@@ -1220,17 +1470,11 @@ export async function uploadDisputeEvidence(disputeId, files) {
 
 export async function respondToDispute(disputeId, responderId, message, evidence = null) {
   const { data, error } = await supabase
-    .from('dispute_responses')
-    .insert([
-      {
-        dispute_id: disputeId,
-        responder_id: responderId,
-        message,
-        evidence,
-      },
-    ])
-    .select()
-    .single();
+    .rpc('respond_to_task_dispute', {
+      p_dispute_id: disputeId,
+      p_message: message,
+      p_evidence: evidence,
+    });
 
   if (error) throw error;
   return data;
@@ -1284,7 +1528,7 @@ export async function completeMilestone(milestoneId, completedBy, notes = '') {
 }
 
 export async function fetchMilestones(agreementId) {
-  const { data, error } = supabase
+  const { data, error } = await supabase
     .from('agreement_milestones')
     .select('*')
     .eq('agreement_id', agreementId)
@@ -1297,43 +1541,51 @@ export async function fetchMilestones(agreementId) {
 /**
  * Appointments (Phase 3.2)
  */
-export async function proposeAppointment(taskId, agreementId, proposedDate, proposedBy, address = '', notes = '') {
-  const { data, error } = await supabase
-    .from('appointments')
-    .insert([
-      {
-        task_id: taskId,
-        agreement_id: agreementId,
-        proposed_date: proposedDate,
-        proposed_by: proposedBy,
-        service_address: address,
-        notes,
-        status: 'pending',
-      },
-    ])
-    .select()
-    .single();
+const normalizeAppointment = (appointment) => {
+  if (!appointment) return appointment;
+  const status = String(appointment.status || '').toLowerCase();
+  return {
+    ...appointment,
+    status,
+    proposed_date: appointment.proposed_date || appointment.starts_at,
+    confirmed_date: appointment.confirmed_date,
+  };
+};
+
+export async function proposeAppointment(
+  taskId,
+  agreementId,
+  proposedDate,
+  proposedBy,
+  address = '',
+  notes = '',
+  options = {}
+) {
+  const { data, error } = await supabase.rpc('reserve_appointment_slot', {
+    p_task_id: String(taskId),
+    p_agreement_id: agreementId ? String(agreementId) : null,
+    p_starts_at: proposedDate,
+    p_duration_minutes: Number(options.durationMinutes || options.duration_minutes || 60),
+    p_fulfillment_type: options.fulfillmentType || options.fulfillment_type || 'IN_PERSON',
+    p_service_address: address || null,
+    p_notes: notes || null,
+    p_destination_latitude: options.destinationLatitude ?? options.destination_latitude ?? null,
+    p_destination_longitude: options.destinationLongitude ?? options.destination_longitude ?? null,
+  });
 
   if (error) throw error;
-  return data;
+  return normalizeAppointment(data);
 }
 
 export async function confirmAppointment(appointmentId, confirmedBy) {
-  const { data, error } = await supabase
-    .from('appointments')
-    .update({
-      status: 'confirmed',
-      confirmed_by: confirmedBy,
-      confirmed_date: new Date().toISOString(),
-    })
-    .eq('id', appointmentId)
-    .select()
-    .single();
+  const { data, error } = await supabase.rpc('confirm_appointment_slot', {
+    p_appointment_id: String(appointmentId),
+  });
 
   if (error) throw error;
 
   // Auto-complete milestone 2
-  const appointment = data;
+  const appointment = normalizeAppointment(data);
   if (appointment?.agreement_id) {
     const { data: milestones } = await supabase
       .from('agreement_milestones')
@@ -1347,7 +1599,46 @@ export async function confirmAppointment(appointmentId, confirmedBy) {
     }
   }
 
-  return data;
+  return appointment;
+}
+
+export async function counterProposeAppointment(appointmentId, newDate, proposedBy, address = null, notes = null, options = {}) {
+  const existing = await fetchAppointment(appointmentId);
+  if (!existing) throw new Error('Appointment not found.');
+
+  return proposeAppointment(
+    existing.task_id,
+    existing.agreement_id,
+    newDate,
+    proposedBy,
+    address ?? existing.service_address ?? '',
+    notes ?? existing.notes ?? '',
+    {
+      durationMinutes: options.durationMinutes || existing.duration_minutes || 60,
+      fulfillmentType: options.fulfillmentType || existing.fulfillment_type || 'IN_PERSON',
+      destinationLatitude: options.destinationLatitude ?? existing.destination_latitude ?? null,
+      destinationLongitude: options.destinationLongitude ?? existing.destination_longitude ?? null,
+    }
+  );
+}
+
+export async function completeAppointment(appointmentId) {
+  const { data, error } = await supabase.rpc('complete_appointment_slot', {
+    p_appointment_id: String(appointmentId),
+  });
+
+  if (error) throw error;
+  return normalizeAppointment(data);
+}
+
+export async function cancelAppointment(appointmentId, reason = '') {
+  const { data, error } = await supabase.rpc('cancel_appointment_slot', {
+    p_appointment_id: String(appointmentId),
+    p_reason: reason || null,
+  });
+
+  if (error) throw error;
+  return normalizeAppointment(data);
 }
 
 export async function fetchAppointment(appointmentId) {
@@ -1358,7 +1649,7 @@ export async function fetchAppointment(appointmentId) {
     .maybeSingle();
 
   if (error) throw error;
-  return data;
+  return normalizeAppointment(data);
 }
 
 export async function fetchAppointmentByTask(taskId) {
@@ -1366,8 +1657,10 @@ export async function fetchAppointmentByTask(taskId) {
     .from('appointments')
     .select('*')
     .eq('task_id', taskId)
+    .order('created_at', { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (error) throw error;
-  return data;
+  return normalizeAppointment(data);
 }

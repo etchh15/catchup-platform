@@ -2,6 +2,11 @@
 -- PHASE 1 CRITICAL FEATURES - Database Schema Migration
 -- Date: May 28, 2026
 -- ============================================================================
+-- Apply order:
+--   1. phase-1-migrations.sql
+--   2. phase-2-3-4-migrations.sql
+--   3. phase-2-3-4-patch-accept-bid.sql
+--   4. storage-disputes-bucket.sql
 -- Run this migration in Supabase SQL Editor to set up Phase 1 features:
 -- 1. Notifications System (#9)
 -- 2. Specialist Reputation Card (#7)
@@ -26,11 +31,14 @@ BEGIN
       'task_completed',
       'dispute_filed',
       'dispute_response',
+      'dispute_resolved',
       'review_received',
       'verification_status'
     );
   END IF;
 END$$;
+
+ALTER TYPE notification_type ADD VALUE IF NOT EXISTS 'dispute_resolved';
 
 -- Notifications table - stores all in-app notifications
 CREATE TABLE IF NOT EXISTS notifications (
@@ -45,11 +53,10 @@ CREATE TABLE IF NOT EXISTS notifications (
   action_url TEXT, -- Link where user should go: /task/123/room, etc.
   is_read BOOLEAN DEFAULT false,
   read_at TIMESTAMP WITH TIME ZONE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  
-  -- Index for fast queries on recipient + creation order
-  CONSTRAINT fk_sender_profile FOREIGN KEY (sender_id) REFERENCES profiles(id)
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
+
+COMMENT ON TABLE notifications IS 'In-app notifications with recipient-specific action URLs.';
 
 CREATE INDEX IF NOT EXISTS idx_notifications_recipient_created 
   ON notifications(recipient_id, created_at DESC);
@@ -81,6 +88,8 @@ CREATE TABLE IF NOT EXISTS notification_preferences (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
+COMMENT ON TABLE notification_preferences IS 'User-specific notification channel preferences for in-app and email.';
+
 -- Notification delivery log - tracks email/SMS/WhatsApp deliveries (Phase 2+)
 CREATE TABLE IF NOT EXISTS notification_delivery (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -92,6 +101,8 @@ CREATE TABLE IF NOT EXISTS notification_delivery (
   sent_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
+
+COMMENT ON TABLE notification_delivery IS 'Delivery tracking records for outbound notification channels.';
 
 CREATE INDEX IF NOT EXISTS idx_notification_delivery_status 
   ON notification_delivery(notification_id, status);
@@ -112,6 +123,8 @@ CREATE TABLE IF NOT EXISTS specialist_metrics (
   
   UNIQUE(specialist_id, task_id)
 );
+
+COMMENT ON TABLE specialist_metrics IS 'Specialist response time tracking per task for reputation calculations.';
 
 CREATE INDEX IF NOT EXISTS idx_specialist_metrics_specialist 
   ON specialist_metrics(specialist_id);
@@ -140,6 +153,8 @@ CREATE TABLE IF NOT EXISTS specialist_reputation (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
+COMMENT ON TABLE specialist_reputation IS 'Aggregated specialist reputation metrics including ratings and response speed.';
+
 -- ============================================================================
 -- FEATURE #4: CONTACT UNLOCK AFTER ACCEPTANCE
 -- ============================================================================
@@ -152,6 +167,8 @@ CREATE TABLE IF NOT EXISTS contact_access_log (
   room_id UUID REFERENCES workspace_rooms(id) ON DELETE CASCADE,
   accessed_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
+
+COMMENT ON TABLE contact_access_log IS 'Audit log recording when contact details are revealed after acceptance.';
 
 CREATE INDEX IF NOT EXISTS idx_contact_access_viewer_target 
   ON contact_access_log(viewer_id, target_id);
@@ -368,6 +385,7 @@ CREATE OR REPLACE FUNCTION calculate_specialist_reputation(p_specialist_id UUID)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   v_completed_jobs INT;
@@ -381,9 +399,9 @@ BEGIN
   WHERE specialist_id = p_specialist_id AND status = 'completed';
 
   -- Calculate average rating from reviews
-  SELECT ROUND(AVG(rating)::numeric, 1) INTO v_avg_rating
+  SELECT ROUND(AVG(rating_score)::numeric, 1) INTO v_avg_rating
   FROM reviews
-  WHERE specialist_id = p_specialist_id AND rating IS NOT NULL;
+  WHERE specialist_id = p_specialist_id AND rating_score IS NOT NULL;
 
   -- Calculate average response time
   SELECT AVG(response_time_hours) INTO v_avg_response_time
@@ -391,26 +409,26 @@ BEGIN
   WHERE specialist_id = p_specialist_id;
 
   -- Calculate profile completeness (rough estimate)
-  -- Check which fields are filled: full_name, phone, bio, category, service_areas, verified
+  -- Check which fields are filled: full_name, phone_number, bio, category, service_areas, verified
   v_profile_completeness := CASE
     WHEN (SELECT COUNT(*) FROM profiles 
           WHERE id = p_specialist_id 
           AND full_name IS NOT NULL 
-          AND phone IS NOT NULL) > 0 THEN 50
+          AND phone_number IS NOT NULL) > 0 THEN 50
     ELSE 20
   END;
   IF EXISTS(SELECT 1 FROM specialist_reputation WHERE specialist_id = p_specialist_id) THEN
     UPDATE specialist_reputation
     SET 
       total_completed_jobs = v_completed_jobs,
-      total_reviews = (SELECT COUNT(*) FROM reviews WHERE specialist_id = p_specialist_id AND rating IS NOT NULL),
+      total_reviews = (SELECT COUNT(*) FROM reviews WHERE specialist_id = p_specialist_id AND rating_score IS NOT NULL),
       average_rating = COALESCE(v_avg_rating, 0),
       response_time_hours = COALESCE(v_avg_response_time, 0),
       updated_at = now()
     WHERE specialist_id = p_specialist_id;
   ELSE
     INSERT INTO specialist_reputation (specialist_id, total_completed_jobs, total_reviews, average_rating, response_time_hours, updated_at)
-    VALUES (p_specialist_id, v_completed_jobs, COALESCE((SELECT COUNT(*) FROM reviews WHERE specialist_id = p_specialist_id AND rating IS NOT NULL), 0), COALESCE(v_avg_rating, 0), COALESCE(v_avg_response_time, 0), now());
+    VALUES (p_specialist_id, v_completed_jobs, COALESCE((SELECT COUNT(*) FROM reviews WHERE specialist_id = p_specialist_id AND rating_score IS NOT NULL), 0), COALESCE(v_avg_rating, 0), COALESCE(v_avg_response_time, 0), now());
   END IF;
 END;
 $$;
@@ -428,6 +446,7 @@ CREATE OR REPLACE FUNCTION create_notification(
 RETURNS UUID
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   v_notification_id UUID;

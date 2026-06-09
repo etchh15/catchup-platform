@@ -1,23 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useOptimistic, useCallback } from 'react';
+import { useToast } from './Toast';
 
 export default function DeliveryButton({ isSpecialist, hasDelivered, onMarkDelivered, loading, disabled }) {
+  const toast = useToast();
   const [showMessage, setShowMessage] = useState(false);
   const [message, setMessage] = useState('');
 
-  if (!isSpecialist || hasDelivered) {
+  // Optimistic state: immediately show hasDelivered as true
+  const [optimisticDelivered, updateOptimisticDelivered] = useOptimistic(hasDelivered, (state, _action) => true);
+  const [delivering, setDelivering] = useState(false);
+
+  const handleSubmit = useCallback(
+    async (e) => {
+      e.preventDefault();
+      
+      // 1. Optimistic UI: immediately show as delivered
+      updateOptimisticDelivered();
+      setDelivering(true);
+
+      try {
+        // 2. Send delivery notification in background
+        await onMarkDelivered(message);
+        setMessage('');
+        setShowMessage(false);
+        toast('Delivery marked. The client can now confirm completion.', 'success');
+      } catch (err) {
+        // On error, revert optimistic state
+        setDelivering(false);
+        console.error('❌ Error marking as delivered:', err);
+        toast('Failed to mark as delivered', 'error');
+      }
+    },
+    [message, updateOptimisticDelivered, onMarkDelivered, toast]
+  );
+
+  if (!isSpecialist || optimisticDelivered) {
     return null;
   }
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await onMarkDelivered(message);
-      setMessage('');
-      setShowMessage(false);
-    } catch (err) {
-      console.error('Error:', err);
-    }
-  };
 
   if (showMessage) {
     return (
@@ -28,21 +47,28 @@ export default function DeliveryButton({ isSpecialist, hasDelivered, onMarkDeliv
           placeholder="Optional message to client (e.g., 'Work is complete, please inspect')"
           style={styles.textarea}
           maxLength={500}
+          disabled={delivering}
         />
         <div style={styles.buttons}>
           <button
             type="button"
-            onClick={() => setShowMessage(false)}
+            onClick={() => {
+              setShowMessage(false);
+              setMessage('');
+            }}
+            disabled={delivering}
             style={styles.cancelBtn}
           >
             Cancel
           </button>
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || delivering}
+            className="workspace-action success"
             style={styles.submitBtn}
           >
-            {loading ? 'Submitting...' : 'Mark Delivered'}
+            <span>{delivering ? 'Sending' : 'Delivered'}</span>
+            <small>{delivering ? 'Please wait' : 'Notify client'}</small>
           </button>
         </div>
       </form>
@@ -52,41 +78,34 @@ export default function DeliveryButton({ isSpecialist, hasDelivered, onMarkDeliv
   return (
     <button
       onClick={() => setShowMessage(true)}
-      disabled={disabled || loading}
-      style={styles.deliveryBtn}
+      disabled={disabled || loading || delivering}
+      className="workspace-action success workspace-delivery-action"
     >
-      ✓ Mark Work Delivered
+      <span>Mark done</span>
+      <small>Notify client</small>
     </button>
   );
 }
 
 const styles = {
-  deliveryBtn: {
-    padding: '10px 16px',
-    background: '#22c55e',
-    color: 'white',
-    border: 'none',
-    borderRadius: '6px',
-    fontSize: '14px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    marginBottom: '12px',
-    transition: 'all 0.2s',
-  },
   form: {
     display: 'flex',
     flexDirection: 'column',
     gap: '12px',
-    marginBottom: '12px',
+    marginBottom: 0,
     padding: '12px',
-    background: '#f0fdf4',
-    border: '1px solid #86efac',
-    borderRadius: '6px',
+    background: 'var(--green-dim)',
+    border: '1px solid var(--green-border)',
+    borderRadius: '12px',
+    gridColumn: '1 / -1',
+    width: '100%',
   },
   textarea: {
     padding: '10px',
-    border: '1px solid #d1d5db',
-    borderRadius: '4px',
+    background: 'var(--bg-soft)',
+    color: 'var(--text)',
+    border: '1px solid var(--border-strong)',
+    borderRadius: '8px',
     fontFamily: 'inherit',
     fontSize: '13px',
     resize: 'vertical',
@@ -99,21 +118,14 @@ const styles = {
   },
   cancelBtn: {
     padding: '8px 12px',
-    background: 'white',
-    color: '#666',
-    border: '1px solid #d1d5db',
-    borderRadius: '4px',
+    background: 'var(--surface-2)',
+    color: 'var(--text-2)',
+    border: '1px solid var(--border)',
+    borderRadius: '8px',
     fontSize: '13px',
     cursor: 'pointer',
   },
   submitBtn: {
-    padding: '8px 16px',
-    background: '#22c55e',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    fontSize: '13px',
-    fontWeight: '600',
-    cursor: 'pointer',
+    minWidth: '132px',
   },
 };

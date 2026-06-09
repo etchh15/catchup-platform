@@ -1,4 +1,37 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+
+const statusOf = (appointment) => String(appointment?.status || '').toLowerCase();
+const fulfillmentOf = (appointment) => String(appointment?.fulfillment_type || 'IN_PERSON').toUpperCase();
+
+const formatMoney = (value) => {
+  const amount = Number(value || 0);
+  return amount > 0 ? `${amount.toLocaleString()} EGP` : 'Quote based';
+};
+
+const formatDateTime = (value) => {
+  if (!value) return 'Not scheduled';
+  return new Date(value).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+const buildSlotOptions = () => {
+  const slots = [];
+  const now = new Date();
+  for (let day = 1; day <= 4; day += 1) {
+    [10, 13, 16, 19].forEach((hour) => {
+      const slot = new Date(now);
+      slot.setDate(now.getDate() + day);
+      slot.setHours(hour, 0, 0, 0);
+      slots.push(slot);
+    });
+  }
+  return slots;
+};
 
 export default function ScheduleAppointment({
   isSpecialist,
@@ -9,351 +42,477 @@ export default function ScheduleAppointment({
   loading,
 }) {
   const [showForm, setShowForm] = useState(false);
-  const [proposedDate, setProposedDate] = useState('');
-  const [address, setAddress] = useState('');
-  const [notes, setNotes] = useState('');
+  const [selectedSlot, setSelectedSlot] = useState('');
+  const [customSlot, setCustomSlot] = useState('');
+  const [fulfillmentType, setFulfillmentType] = useState(fulfillmentOf(appointment));
+  const [durationMinutes, setDurationMinutes] = useState(Number(appointment?.duration_minutes || 60));
+  const [address, setAddress] = useState(appointment?.service_address || '');
+  const [notes, setNotes] = useState(appointment?.notes || '');
+  const [destinationLatitude, setDestinationLatitude] = useState(appointment?.destination_latitude || '');
+  const [destinationLongitude, setDestinationLongitude] = useState(appointment?.destination_longitude || '');
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      if (appointment && appointment.status === 'rescheduled') {
-        await onCounterPropose(appointment.id, proposedDate);
-      } else {
-        await onPropose(proposedDate, address, notes);
-      }
-      setProposedDate('');
-      setAddress('');
-      setNotes('');
-      setShowForm(false);
-    } catch (err) {
-      console.error('Error:', err);
+  const slots = useMemo(buildSlotOptions, []);
+  const activeStatus = statusOf(appointment);
+  const startsAt = appointment?.starts_at || appointment?.proposed_date;
+  const priceTotal = appointment?.price_total;
+  const rateSnapshot = appointment?.rate_snapshot;
+  const estimatedTotal = Number(rateSnapshot || 0) > 0
+    ? Number(rateSnapshot) * Number(durationMinutes || 60) / 60
+    : 0;
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    const proposedDate = customSlot || selectedSlot;
+    if (!proposedDate) return;
+
+    const options = {
+      fulfillmentType,
+      durationMinutes,
+      destinationLatitude: destinationLatitude === '' ? null : Number(destinationLatitude),
+      destinationLongitude: destinationLongitude === '' ? null : Number(destinationLongitude),
+    };
+
+    if (appointment && ['pending', 'rescheduled'].includes(activeStatus)) {
+      await onCounterPropose(
+        appointment.id,
+        proposedDate,
+        isSpecialist ? 'specialist' : 'client',
+        address || appointment.service_address || '',
+        notes || appointment.notes || '',
+        options
+      );
+    } else {
+      await onPropose(proposedDate, address, notes, options);
     }
+
+    setShowForm(false);
+    setSelectedSlot('');
+    setCustomSlot('');
   };
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '';
-    try {
-      return new Date(dateStr).toISOString().slice(0, 16);
-    } catch {
-      return dateStr;
-    }
-  };
+  const renderStatusSummary = () => {
+    if (!appointment) return null;
 
-  const daysUntil = (dateStr) => {
-    if (!dateStr) return null;
-    const appointmentDate = new Date(dateStr);
-    const today = new Date();
-    const diff = Math.ceil((appointmentDate - today) / (1000 * 60 * 60 * 24));
-    return diff;
-  };
+    const confirmed = activeStatus === 'confirmed';
+    const completed = activeStatus === 'completed';
+    const cancelled = activeStatus === 'cancelled';
 
-  if (!appointment && !isSpecialist) {
-    return null;
-  }
-
-  if (appointment && appointment.status === 'confirmed') {
-    const days = daysUntil(appointment.confirmed_date);
     return (
-      <div style={styles.container}>
-        <div style={styles.header}>
-          <h4 style={styles.title}>📅 Appointment Scheduled</h4>
-          {days !== null && (
-            <span style={styles.countdown}>
-              {days > 0 ? `${days} days away` : days === 0 ? 'Today!' : 'Past'}
-            </span>
-          )}
+      <div style={styles.summary}>
+        <div>
+          <span style={styles.eyebrow}>
+            {confirmed ? 'Confirmed appointment' : completed ? 'Completed appointment' : cancelled ? 'Cancelled appointment' : 'Pending reservation'}
+          </span>
+          <h4 style={styles.title}>{formatDateTime(startsAt)}</h4>
+          <p style={styles.copy}>
+            {fulfillmentOf(appointment) === 'ONLINE'
+              ? appointment.video_room_url
+                ? 'Online room is active and attached to this appointment.'
+                : 'Online room will activate after confirmation/payment hold.'
+              : appointment.service_address || 'In-person destination will be shared after confirmation.'}
+          </p>
         </div>
-        <div style={styles.details}>
-          <div style={styles.row}>
-            <span style={styles.label}>Date & Time:</span>
-            <span style={styles.value}>
-              {new Date(appointment.confirmed_date).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </span>
-          </div>
-          {appointment.service_address && (
-            <div style={styles.row}>
-              <span style={styles.label}>Location:</span>
-              <span style={styles.value}>{appointment.service_address}</span>
-            </div>
-          )}
-          {appointment.notes && (
-            <div style={styles.row}>
-              <span style={styles.label}>Notes:</span>
-              <span style={styles.value}>{appointment.notes}</span>
-            </div>
-          )}
+        <div style={styles.receipt}>
+          <span>{appointment.fulfillment_type === 'ONLINE' ? 'Online session' : 'In-person visit'}</span>
+          <strong>{formatMoney(priceTotal || estimatedTotal)}</strong>
+          <small>{Number(appointment.duration_minutes || durationMinutes)} min</small>
         </div>
       </div>
     );
-  }
+  };
 
-  if (appointment && appointment.status === 'pending') {
-    return (
-      <div style={styles.container}>
-        <div style={styles.header}>
-          <h4 style={styles.title}>⏳ Appointment Pending</h4>
-          <span style={styles.status}>Awaiting confirmation</span>
-        </div>
-        <div style={styles.details}>
-          <div style={styles.row}>
-            <span style={styles.label}>Proposed Date:</span>
-            <span style={styles.value}>
-              {new Date(appointment.proposed_date).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </span>
-          </div>
-          {appointment.service_address && (
-            <div style={styles.row}>
-              <span style={styles.label}>Location:</span>
-              <span style={styles.value}>{appointment.service_address}</span>
-            </div>
-          )}
-        </div>
-        {!isSpecialist && (
-          <div style={styles.actions}>
-            <button
-              onClick={() => onConfirm(appointment.id)}
-              disabled={loading}
-              style={styles.confirmBtn}
-            >
-              ✓ Confirm
-            </button>
-            <button
-              onClick={() => setShowForm(true)}
-              disabled={loading}
-              style={styles.counterBtn}
-            >
-              📝 Counter Propose
-            </button>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (isSpecialist && !appointment) {
-    return (
-      <div style={styles.container}>
-        {!showForm ? (
-          <button onClick={() => setShowForm(true)} style={styles.proposeBtn}>
-            📅 Propose Visit Date
+  const renderForm = (submitLabel = 'Reserve time') => (
+    <form onSubmit={handleSubmit} style={styles.form}>
+      <div style={styles.segmented}>
+        {['IN_PERSON', 'ONLINE'].map((type) => (
+          <button
+            type="button"
+            key={type}
+            onClick={() => setFulfillmentType(type)}
+            style={{
+              ...styles.segmentButton,
+              ...(fulfillmentType === type ? styles.segmentButtonActive : {}),
+            }}
+          >
+            {type === 'ONLINE' ? 'Online session' : 'In-person visit'}
           </button>
-        ) : (
-          <form onSubmit={handleSubmit} style={styles.form}>
-            <div style={styles.field}>
-              <label style={styles.label}>Proposed Date & Time *</label>
-              <input
-                type="datetime-local"
-                value={proposedDate}
-                onChange={(e) => setProposedDate(e.target.value)}
-                required
-                style={styles.input}
-                disabled={loading}
-              />
-            </div>
-
-            <div style={styles.field}>
-              <label style={styles.label}>Service Address *</label>
-              <input
-                type="text"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="e.g., Downtown, Tala Street"
-                required
-                style={styles.input}
-                disabled={loading}
-              />
-            </div>
-
-            <div style={styles.field}>
-              <label style={styles.label}>Notes</label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Any additional details..."
-                style={styles.textarea}
-                disabled={loading}
-              />
-            </div>
-
-            <div style={styles.buttons}>
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                disabled={loading}
-                style={styles.cancelBtn}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={loading || !proposedDate || !address}
-                style={styles.submitBtn}
-              >
-                {loading ? 'Proposing...' : 'Propose'}
-              </button>
-            </div>
-          </form>
-        )}
+        ))}
       </div>
-    );
-  }
 
-  return null;
+      <div style={styles.slotGrid}>
+        {slots.map((slot) => {
+          const iso = slot.toISOString();
+          const selected = selectedSlot === iso && !customSlot;
+          return (
+            <button
+              type="button"
+              key={iso}
+              onClick={() => {
+                setSelectedSlot(iso);
+                setCustomSlot('');
+              }}
+              style={{ ...styles.slot, ...(selected ? styles.slotActive : {}) }}
+            >
+              <span>{slot.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+              <strong>{slot.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</strong>
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={styles.fieldGrid}>
+        <label style={styles.field}>
+          <span style={styles.label}>Custom time</span>
+          <input
+            type="datetime-local"
+            value={customSlot}
+            onChange={(e) => {
+              setCustomSlot(e.target.value);
+              setSelectedSlot('');
+            }}
+            style={styles.input}
+            disabled={loading}
+          />
+        </label>
+        <label style={styles.field}>
+          <span style={styles.label}>Duration</span>
+          <select
+            value={durationMinutes}
+            onChange={(e) => setDurationMinutes(Number(e.target.value))}
+            style={styles.input}
+            disabled={loading}
+          >
+            <option value={30}>30 minutes</option>
+            <option value={60}>1 hour</option>
+            <option value={90}>1.5 hours</option>
+            <option value={120}>2 hours</option>
+          </select>
+        </label>
+      </div>
+
+      {fulfillmentType === 'IN_PERSON' && (
+        <>
+          <label style={styles.field}>
+            <span style={styles.label}>Visit address</span>
+            <input
+              type="text"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Building, street, district"
+              required
+              style={styles.input}
+              disabled={loading}
+            />
+          </label>
+          <div style={styles.fieldGrid}>
+            <label style={styles.field}>
+              <span style={styles.label}>Latitude</span>
+              <input
+                type="number"
+                step="any"
+                value={destinationLatitude}
+                onChange={(e) => setDestinationLatitude(e.target.value)}
+                placeholder="Optional"
+                style={styles.input}
+                disabled={loading}
+              />
+            </label>
+            <label style={styles.field}>
+              <span style={styles.label}>Longitude</span>
+              <input
+                type="number"
+                step="any"
+                value={destinationLongitude}
+                onChange={(e) => setDestinationLongitude(e.target.value)}
+                placeholder="Optional"
+                style={styles.input}
+                disabled={loading}
+              />
+            </label>
+          </div>
+        </>
+      )}
+
+      <label style={styles.field}>
+        <span style={styles.label}>Appointment notes</span>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Access details, online goals, tools needed..."
+          style={styles.textarea}
+          disabled={loading}
+        />
+      </label>
+
+      <div style={styles.priceBox}>
+        <div>
+          <span style={styles.eyebrow}>Estimated reservation</span>
+          <strong style={styles.price}>{formatMoney(priceTotal || estimatedTotal)}</strong>
+        </div>
+        <small style={styles.muted}>The final receipt stays attached to the workspace.</small>
+      </div>
+
+      <div style={styles.buttons}>
+        <button type="button" onClick={() => setShowForm(false)} disabled={loading} style={styles.secondaryButton}>
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={loading || (!selectedSlot && !customSlot) || (fulfillmentType === 'IN_PERSON' && !address)}
+          style={styles.primaryButton}
+        >
+          {loading ? 'Checking slot...' : submitLabel}
+        </button>
+      </div>
+    </form>
+  );
+
+  if (!appointment && !isSpecialist) return null;
+
+  return (
+    <div style={styles.container}>
+      <div style={styles.header}>
+        <div>
+          <span style={styles.eyebrow}>Appointment engine</span>
+          <h3 style={styles.heading}>Reserve a protected service window</h3>
+        </div>
+        <span style={styles.statePill}>{appointment ? activeStatus || 'pending' : 'No slot'}</span>
+      </div>
+
+      {renderStatusSummary()}
+
+      {appointment?.video_room_url && activeStatus === 'confirmed' && (
+        <a href={appointment.video_room_url} target="_blank" rel="noreferrer" style={styles.roomLink}>
+          Join secure online room
+        </a>
+      )}
+
+      {appointment && activeStatus === 'pending' && !showForm && (
+        <div style={styles.buttons}>
+          <button onClick={() => onConfirm(appointment.id)} disabled={loading} style={styles.primaryButton}>
+            Confirm reservation
+          </button>
+          <button onClick={() => setShowForm(true)} disabled={loading} style={styles.secondaryButton}>
+            Suggest another time
+          </button>
+        </div>
+      )}
+
+      {!appointment && isSpecialist && !showForm && (
+        <button onClick={() => setShowForm(true)} disabled={loading} style={styles.primaryButtonFull}>
+          Propose appointment window
+        </button>
+      )}
+
+      {showForm && renderForm(appointment ? 'Send new reservation' : 'Reserve appointment')}
+    </div>
+  );
 }
 
 const styles = {
   container: {
-    background: 'white',
-    border: '1px solid var(--border)',
-    borderRadius: '8px',
-    padding: '16px',
-    marginBottom: '16px',
+    border: '1px solid rgba(148, 163, 184, 0.24)',
+    background: 'linear-gradient(145deg, rgba(15,23,42,0.94), rgba(17,34,61,0.9))',
+    borderRadius: 18,
+    padding: 18,
+    color: '#e5eefc',
+    boxShadow: '0 20px 60px rgba(2, 6, 23, 0.28)',
   },
   header: {
     display: 'flex',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '12px',
+    gap: 12,
+    marginBottom: 14,
+  },
+  eyebrow: {
+    display: 'block',
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 0,
+    color: '#94a3b8',
+    fontWeight: 800,
+  },
+  heading: {
+    margin: '4px 0 0',
+    fontSize: 19,
+    lineHeight: 1.2,
+  },
+  statePill: {
+    border: '1px solid rgba(245, 158, 11, 0.34)',
+    background: 'rgba(245, 158, 11, 0.14)',
+    color: '#f8c45f',
+    borderRadius: 999,
+    padding: '6px 10px',
+    fontSize: 12,
+    fontWeight: 800,
+    textTransform: 'capitalize',
+    whiteSpace: 'nowrap',
+  },
+  summary: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1fr) auto',
+    gap: 14,
+    alignItems: 'stretch',
+    marginBottom: 14,
   },
   title: {
+    margin: '4px 0 6px',
+    fontSize: 17,
+  },
+  copy: {
     margin: 0,
-    fontSize: '14px',
-    fontWeight: '600',
+    color: '#9fb0c8',
+    lineHeight: 1.5,
   },
-  countdown: {
-    fontSize: '12px',
-    fontWeight: '600',
-    background: '#dbeafe',
-    color: '#1e40af',
-    padding: '4px 8px',
-    borderRadius: '4px',
-  },
-  status: {
-    fontSize: '12px',
-    fontWeight: '600',
-    background: '#fef3c7',
-    color: '#92400e',
-    padding: '4px 8px',
-    borderRadius: '4px',
-  },
-  details: {
+  receipt: {
+    minWidth: 138,
+    border: '1px solid rgba(148, 163, 184, 0.22)',
+    borderRadius: 14,
+    padding: 12,
+    background: 'rgba(255,255,255,0.05)',
     display: 'flex',
     flexDirection: 'column',
-    gap: '12px',
-  },
-  row: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: '13px',
-  },
-  label: {
-    fontWeight: '500',
-    color: 'var(--text-muted)',
-  },
-  value: {
-    color: 'var(--text)',
-    fontWeight: '500',
-  },
-  actions: {
-    display: 'flex',
-    gap: '8px',
-    marginTop: '12px',
-  },
-  confirmBtn: {
-    flex: 1,
-    padding: '10px',
-    background: 'var(--green)',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    fontSize: '13px',
-    fontWeight: '600',
-    cursor: 'pointer',
-  },
-  counterBtn: {
-    flex: 1,
-    padding: '10px',
-    background: 'white',
-    color: 'var(--text)',
-    border: '1px solid var(--border)',
-    borderRadius: '4px',
-    fontSize: '13px',
-    fontWeight: '600',
-    cursor: 'pointer',
-  },
-  proposeBtn: {
-    width: '100%',
-    padding: '12px',
-    background: 'var(--blue)',
-    color: 'white',
-    border: 'none',
-    borderRadius: '6px',
-    fontSize: '14px',
-    fontWeight: '600',
-    cursor: 'pointer',
+    gap: 4,
   },
   form: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
+    display: 'grid',
+    gap: 12,
+    marginTop: 14,
+  },
+  segmented: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: 8,
+  },
+  segmentButton: {
+    border: '1px solid rgba(148, 163, 184, 0.25)',
+    background: 'rgba(15,23,42,0.82)',
+    color: '#cbd5e1',
+    borderRadius: 12,
+    padding: '11px 12px',
+    fontWeight: 800,
+    cursor: 'pointer',
+  },
+  segmentButtonActive: {
+    background: '#f8b83e',
+    color: '#111827',
+    borderColor: '#f8b83e',
+  },
+  slotGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(116px, 1fr))',
+    gap: 8,
+  },
+  slot: {
+    border: '1px solid rgba(148, 163, 184, 0.22)',
+    background: 'rgba(255,255,255,0.045)',
+    color: '#e2e8f0',
+    borderRadius: 12,
+    padding: 10,
+    textAlign: 'left',
+    cursor: 'pointer',
+  },
+  slotActive: {
+    borderColor: '#10b981',
+    boxShadow: '0 0 0 1px rgba(16,185,129,0.32) inset',
+  },
+  fieldGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+    gap: 10,
   },
   field: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '6px',
+    display: 'grid',
+    gap: 6,
+  },
+  label: {
+    fontSize: 12,
+    color: '#a8b5c9',
+    fontWeight: 800,
   },
   input: {
-    padding: '10px',
-    border: '1px solid var(--border)',
-    borderRadius: '4px',
-    fontSize: '13px',
-    fontFamily: 'inherit',
+    width: '100%',
+    border: '1px solid rgba(148, 163, 184, 0.24)',
+    background: 'rgba(2,6,23,0.46)',
+    color: '#f8fafc',
+    borderRadius: 12,
+    padding: '11px 12px',
+    fontSize: 14,
   },
   textarea: {
-    padding: '10px',
-    border: '1px solid var(--border)',
-    borderRadius: '4px',
-    fontSize: '13px',
-    fontFamily: 'inherit',
-    minHeight: '80px',
+    width: '100%',
+    minHeight: 86,
+    border: '1px solid rgba(148, 163, 184, 0.24)',
+    background: 'rgba(2,6,23,0.46)',
+    color: '#f8fafc',
+    borderRadius: 12,
+    padding: '11px 12px',
+    fontSize: 14,
     resize: 'vertical',
+  },
+  priceBox: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    gap: 12,
+    alignItems: 'center',
+    border: '1px solid rgba(16, 185, 129, 0.28)',
+    background: 'rgba(16, 185, 129, 0.08)',
+    borderRadius: 14,
+    padding: 12,
+  },
+  price: {
+    display: 'block',
+    marginTop: 3,
+    color: '#34d399',
+    fontSize: 18,
+  },
+  muted: {
+    color: '#9fb0c8',
   },
   buttons: {
     display: 'flex',
-    gap: '8px',
+    justifyContent: 'flex-end',
+    gap: 10,
+    flexWrap: 'wrap',
   },
-  cancelBtn: {
-    flex: 1,
-    padding: '10px',
-    background: 'white',
-    color: 'var(--text)',
-    border: '1px solid var(--border)',
-    borderRadius: '4px',
-    fontSize: '13px',
-    fontWeight: '600',
+  primaryButton: {
+    border: 0,
+    background: '#3b82f6',
+    color: '#fff',
+    borderRadius: 12,
+    padding: '11px 16px',
+    fontWeight: 900,
     cursor: 'pointer',
   },
-  submitBtn: {
-    flex: 1,
-    padding: '10px',
-    background: 'var(--blue)',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    fontSize: '13px',
-    fontWeight: '600',
+  primaryButtonFull: {
+    width: '100%',
+    border: 0,
+    background: '#3b82f6',
+    color: '#fff',
+    borderRadius: 12,
+    padding: '12px 16px',
+    fontWeight: 900,
     cursor: 'pointer',
+  },
+  secondaryButton: {
+    border: '1px solid rgba(148, 163, 184, 0.25)',
+    background: 'rgba(255,255,255,0.05)',
+    color: '#dbeafe',
+    borderRadius: 12,
+    padding: '11px 16px',
+    fontWeight: 800,
+    cursor: 'pointer',
+  },
+  roomLink: {
+    display: 'block',
+    textAlign: 'center',
+    textDecoration: 'none',
+    borderRadius: 12,
+    padding: '11px 14px',
+    background: 'rgba(16, 185, 129, 0.14)',
+    color: '#6ee7b7',
+    fontWeight: 900,
+    marginBottom: 12,
   },
 };

@@ -1,19 +1,44 @@
-import React, { useState } from 'react';
+import React, { useState, useOptimistic, useCallback } from 'react';
+import { useToast } from './Toast';
 
 export default function MilestoneChecklist({ milestones, isSpecialist, isClient, onMilestoneComplete, loading }) {
+  const toast = useToast();
   const [expandedId, setExpandedId] = useState(null);
 
-  if (!milestones || milestones.length === 0) {
-    return null;
-  }
+  // Optimistic state: immediately mark milestone as completed in UI
+  const [optimisticMilestones, updateOptimisticMilestone] = useOptimistic(
+    milestones,
+    (state, milestoneId) =>
+      state.map((m) =>
+        m.id === milestoneId
+          ? { ...m, status: 'completed', completed_at: new Date().toISOString() }
+          : m
+      )
+  );
 
-  const handleComplete = async (milestone) => {
-    try {
-      await onMilestoneComplete(milestone.id);
-    } catch (err) {
-      console.error('Error:', err);
-    }
-  };
+  const [completingId, setCompletingId] = useState(null);
+
+  const handleComplete = useCallback(
+    async (milestone) => {
+      // 1. Optimistic UI: mark as completed immediately
+      updateOptimisticMilestone(milestone.id);
+      setCompletingId(milestone.id);
+
+      try {
+        // 2. Save to backend in background
+        await onMilestoneComplete(milestone.id);
+        toast('Milestone updated.', 'success');
+      } catch (err) {
+        // On error, revert (optimisticMilestones will fall back to original)
+        setCompletingId(null);
+        console.error('❌ Error completing milestone:', err);
+        toast('Failed to complete milestone', 'error');
+      } finally {
+        setCompletingId(null);
+      }
+    },
+    [updateOptimisticMilestone, onMilestoneComplete, toast]
+  );
 
   const MILESTONE_ICONS = {
     1: '📝',
@@ -23,7 +48,11 @@ export default function MilestoneChecklist({ milestones, isSpecialist, isClient,
     5: '✅',
   };
 
-  const progress = Math.round((milestones.filter((m) => m.status === 'completed').length / milestones.length) * 100);
+  if (!optimisticMilestones || optimisticMilestones.length === 0) {
+    return null;
+  }
+
+  const progress = Math.round((optimisticMilestones.filter((m) => m.status === 'completed').length / optimisticMilestones.length) * 100);
 
   return (
     <div style={styles.container}>
@@ -37,7 +66,7 @@ export default function MilestoneChecklist({ milestones, isSpecialist, isClient,
       </div>
 
       <div style={styles.milestonesList}>
-        {milestones.map((milestone) => (
+        {optimisticMilestones.map((milestone) => (
           <div key={milestone.id} style={styles.milestoneCard}>
             <div
               style={styles.milestoneHeader}
@@ -45,7 +74,7 @@ export default function MilestoneChecklist({ milestones, isSpecialist, isClient,
             >
               <div style={styles.milestoneTitle}>
                 <span style={styles.icon}>
-                  {milestone.status === 'completed' ? '✓' : MILESTONE_ICONS[milestone.milestone_number]}
+                  {milestone.status === 'completed' ? '✅' : MILESTONE_ICONS[milestone.milestone_number]}
                 </span>
                 <div>
                   <div style={styles.milestoneName}>{milestone.name}</div>
@@ -60,7 +89,7 @@ export default function MilestoneChecklist({ milestones, isSpecialist, isClient,
                   ...(milestone.status === 'completed' ? styles.statusDone : styles.statusPending),
                 }}
               >
-                {milestone.status === 'completed' ? '✓ Done' : 'Pending'}
+                {milestone.status === 'completed' ? '✓ Done' : completingId === milestone.id ? '⏳ Saving…' : 'Pending'}
               </div>
             </div>
 
@@ -91,20 +120,20 @@ export default function MilestoneChecklist({ milestones, isSpecialist, isClient,
                 {milestone.status === 'pending' && milestone.milestone_number === 3 && isSpecialist && (
                   <button
                     onClick={() => handleComplete(milestone)}
-                    disabled={loading}
+                    disabled={loading || completingId === milestone.id}
                     style={styles.completeBtn}
                   >
-                    Mark Work Started
+                    {completingId === milestone.id ? '⏳ Marking…' : '✓ Mark Work Started'}
                   </button>
                 )}
 
                 {milestone.status === 'pending' && milestone.milestone_number === 4 && isClient && (
                   <button
                     onClick={() => handleComplete(milestone)}
-                    disabled={loading}
+                    disabled={loading || completingId === milestone.id}
                     style={styles.completeBtn}
                   >
-                    Mark as Inspected
+                    {completingId === milestone.id ? '⏳ Marking…' : '✓ Mark as Inspected'}
                   </button>
                 )}
               </div>
@@ -118,11 +147,11 @@ export default function MilestoneChecklist({ milestones, isSpecialist, isClient,
 
 const styles = {
   container: {
-    background: 'white',
+    background: 'rgba(8, 12, 20, 0.28)',
     border: '1px solid var(--border)',
-    borderRadius: '8px',
+    borderRadius: '12px',
     padding: '16px',
-    marginBottom: '16px',
+    marginBottom: 0,
   },
   header: {
     display: 'flex',
@@ -134,19 +163,20 @@ const styles = {
     margin: 0,
     fontSize: '15px',
     fontWeight: '600',
+    color: 'var(--text)',
   },
   progress: {
     fontSize: '13px',
     fontWeight: '600',
     color: 'var(--green)',
-    background: '#f0fdf4',
+    background: 'var(--green-dim)',
     padding: '4px 8px',
-    borderRadius: '4px',
+    borderRadius: '999px',
   },
   progressBar: {
     height: '8px',
     background: 'var(--bg-soft)',
-    borderRadius: '4px',
+    borderRadius: '999px',
     overflow: 'hidden',
     marginBottom: '16px',
   },
@@ -162,7 +192,8 @@ const styles = {
   },
   milestoneCard: {
     border: '1px solid var(--border)',
-    borderRadius: '6px',
+    background: 'rgba(255,255,255,0.03)',
+    borderRadius: '10px',
     overflow: 'hidden',
   },
   milestoneHeader: {
@@ -170,7 +201,7 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '12px',
-    background: 'var(--bg-soft)',
+    background: 'rgba(13, 18, 32, 0.72)',
     cursor: 'pointer',
     transition: 'background 0.2s',
   },
@@ -191,26 +222,26 @@ const styles = {
   },
   description: {
     fontSize: '12px',
-    color: 'var(--text-muted)',
+    color: 'var(--text-2)',
     marginTop: '2px',
   },
   status: {
     fontSize: '12px',
     fontWeight: '600',
     padding: '4px 8px',
-    borderRadius: '4px',
+    borderRadius: '999px',
   },
   statusDone: {
-    background: '#d1fae5',
-    color: var(--green),
+    background: 'var(--green-dim)',
+    color: 'var(--green)',
   },
   statusPending: {
-    background: '#fef3c7',
-    color: '#92400e',
+    background: 'var(--gold-dim)',
+    color: 'var(--gold-light)',
   },
   expandedContent: {
     padding: '12px',
-    background: 'white',
+    background: 'rgba(8, 12, 20, 0.46)',
     borderTop: '1px solid var(--border)',
     display: 'flex',
     flexDirection: 'column',
@@ -223,7 +254,7 @@ const styles = {
   },
   detailLabel: {
     fontWeight: '500',
-    color: 'var(--text-muted)',
+    color: 'var(--text-2)',
   },
   detailValue: {
     color: 'var(--text)',
@@ -233,7 +264,7 @@ const styles = {
     background: 'var(--green)',
     color: 'white',
     border: 'none',
-    borderRadius: '4px',
+    borderRadius: '8px',
     fontSize: '13px',
     fontWeight: '600',
     cursor: 'pointer',

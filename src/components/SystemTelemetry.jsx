@@ -1,6 +1,33 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { fetchAdminEmergencySignals } from '../services/supabaseService';
 
-export default function SystemTelemetry() {
+const signalLabel = (value, fallback = 'Unavailable') => value == null ? fallback : value;
+
+export default function SystemTelemetry({ tasks = [], bids = [], specialists = [] }) {
+  const [signals, setSignals] = useState(null);
+  const [signalError, setSignalError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAdminEmergencySignals()
+      .then((data) => {
+        if (!cancelled) setSignals(data);
+      })
+      .catch((err) => {
+        if (!cancelled) setSignalError(err?.message || 'Admin emergency signals unavailable');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const localSignals = useMemo(() => ({
+    openTasks: tasks.filter((task) => task.status === 'open').length,
+    activeTasks: tasks.filter((task) => task.status === 'active').length,
+    pendingBids: bids.filter((bid) => bid.status === 'pending').length,
+    unverifiedSpecialists: specialists.filter((specialist) => !specialist.is_verified && specialist.verification_status !== 'verified').length,
+  }), [tasks, bids, specialists]);
+
   const checks = [
     { label: 'Database', status: 'Connected',   ok: true,  note: 'Supabase responding normally' },
     { label: 'Auth',     status: 'Active',       ok: true,  note: 'Row-level security enabled' },
@@ -23,6 +50,26 @@ export default function SystemTelemetry() {
             <div className="stat-sub">{c.note}</div>
           </div>
         ))}
+      </div>
+
+      <div className="premium-card admin-emergency-console">
+        <div className="dashboard-panel-head">
+          <div>
+            <span className="dashboard-kicker">Emergency console</span>
+            <h3>Founder-away operating signals</h3>
+          </div>
+          <span className="dashboard-alert-count">{signalError || 'Live admin snapshot'}</span>
+        </div>
+        <div className="admin-signal-grid">
+          <div className="admin-signal risk"><span>Open disputes</span><strong>{signalLabel(signals?.openDisputes)}</strong></div>
+          <div className="admin-signal"><span>Active rooms</span><strong>{signalLabel(signals?.activeRooms, localSignals.activeTasks)}</strong></div>
+          <div className="admin-signal warn"><span>Stale open jobs</span><strong>{signalLabel(signals?.staleOpenTasks)}</strong></div>
+          <div className="admin-signal warn"><span>Verification queue</span><strong>{signalLabel(signals?.pendingVerification, localSignals.unverifiedSpecialists)}</strong></div>
+          <div className="admin-signal"><span>Beta waitlist</span><strong>{signalLabel(signals?.betaWaitlist)}</strong></div>
+          <div className="admin-signal risk"><span>Abuse reports</span><strong>{signalLabel(signals?.openAbuseEvents)}</strong></div>
+          <div className="admin-signal warn"><span>Unpaid accepted work</span><strong>{signalLabel(signals?.unpaidAcceptedWork)}</strong></div>
+          <div className="admin-signal"><span>Pending bids</span><strong>{localSignals.pendingBids}</strong></div>
+        </div>
       </div>
 
       <div className="premium-card">

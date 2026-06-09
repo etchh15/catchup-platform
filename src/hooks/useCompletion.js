@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
+import { markWorkDelivered, confirmWorkCompleted } from '../services/supabaseService';
 
 export function useCompletion(taskId, userId) {
   const [completion, setCompletion] = useState(null);
@@ -65,6 +66,7 @@ export function useCompletion(taskId, userId) {
 
     return () => {
       subscription?.unsubscribe();
+      if (subscription) supabase.removeChannel(subscription);
     };
   }, [taskId, userId]);
 
@@ -72,30 +74,17 @@ export function useCompletion(taskId, userId) {
     async (message = '') => {
       setLoading(true);
       try {
-        const { error: updateError } = await supabase
-          .from('tasks')
-          .update({
-            work_delivered_by: userId,
-            work_delivered_at: new Date().toISOString(),
-          })
-          .eq('id', taskId);
-
-        if (updateError) throw updateError;
-
-        // Log in completion_log
-        const { error: logError } = await supabase
-          .from('completion_log')
-          .insert([
-            {
-              task_id: taskId,
-              action: 'work_delivered',
-              actor_id: userId,
-              message,
-            },
-          ]);
-
-        if (logError) throw logError;
-
+        const task = await markWorkDelivered(taskId, userId, message);
+        const deliveredAt = task?.work_delivered_at || new Date().toISOString();
+        setCompletion((prev) => ({
+          ...(prev || { taskId }),
+          taskId,
+          workDeliveredBy: task?.work_delivered_by || userId,
+          workDeliveredAt: deliveredAt,
+          confirmedByClient: task?.confirmed_by_client || prev?.confirmedByClient || null,
+          confirmedByClientAt: task?.confirmed_by_client_at || prev?.confirmedByClientAt || null,
+          status: task?.status || prev?.status || 'active',
+        }));
         return true;
       } catch (err) {
         console.error('Error marking delivery:', err);
@@ -112,31 +101,17 @@ export function useCompletion(taskId, userId) {
     async (message = '') => {
       setLoading(true);
       try {
-        const { error: updateError } = await supabase
-          .from('tasks')
-          .update({
-            confirmed_by_client: userId,
-            confirmed_by_client_at: new Date().toISOString(),
-            status: 'completed',
-          })
-          .eq('id', taskId);
-
-        if (updateError) throw updateError;
-
-        // Log in completion_log
-        const { error: logError } = await supabase
-          .from('completion_log')
-          .insert([
-            {
-              task_id: taskId,
-              action: 'work_confirmed',
-              actor_id: userId,
-              message,
-            },
-          ]);
-
-        if (logError) throw logError;
-
+        const task = await confirmWorkCompleted(taskId, userId, message);
+        const confirmedAt = task?.confirmed_by_client_at || new Date().toISOString();
+        setCompletion((prev) => ({
+          ...(prev || { taskId }),
+          taskId,
+          workDeliveredBy: task?.work_delivered_by || prev?.workDeliveredBy || null,
+          workDeliveredAt: task?.work_delivered_at || prev?.workDeliveredAt || null,
+          confirmedByClient: task?.confirmed_by_client || userId,
+          confirmedByClientAt: confirmedAt,
+          status: task?.status || 'completed',
+        }));
         return true;
       } catch (err) {
         console.error('Error confirming completion:', err);

@@ -26,5 +26,6 @@ __MACOSX/
 # editor
 .vscode/
 .idea/
+.cursor/
 .vercel
 .env*

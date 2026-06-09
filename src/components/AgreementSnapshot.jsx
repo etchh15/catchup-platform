@@ -29,6 +29,7 @@ export default function AgreementSnapshot({ agreement, isOpen, onClose, onAccept
       currency: 'EGP',
     }).format(amount);
   };
+  const agreementId = agreement.id ? String(agreement.id).substring(0, 8).toUpperCase() : 'PENDING';
 
   return (
     <div className="agreement-snapshot-overlay">
@@ -44,7 +45,7 @@ export default function AgreementSnapshot({ agreement, isOpen, onClose, onAccept
           <div className="snapshot-details">
             <div className="detail-row">
               <span className="detail-label">Agreement ID</span>
-              <span className="detail-value">{agreement.id.substring(0, 8).toUpperCase()}</span>
+              <span className="detail-value">{agreementId}</span>
             </div>
 
             <div className="detail-row">

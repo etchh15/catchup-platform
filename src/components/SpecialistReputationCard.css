@@ -1,0 +1,19 @@
+.reputation-card {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  padding: 18px;
+  background: #ffffff;
+}
+
+.reputation-stars {
+  font-size: 14px;
+  letter-spacing: 0.05em;
+}
+
+.reputation-card.compact {
+  padding: 12px;
+}
+
+.reputation-card.clickable {
+  cursor: pointer;
+}

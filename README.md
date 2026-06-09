@@ -1,70 +1,144 @@
-# Getting Started with Create React App
+# CatchUp Platform
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+CatchUp is a local-services marketplace for clients and specialists. Clients post jobs, specialists submit proposals, accepted jobs move into a protected workspace, and the platform tracks agreements, appointments, delivery, disputes, notifications, receipts, and reputation.
 
-## Available Scripts
+The product direction is marketplace trust at local density: make it easy to find the right specialist, agree on scope, keep work documented, and resolve problems without leaving the platform.
 
-In the project directory, you can run:
+## Current Stack
 
-### `npm start`
+- React 19 single-page app
+- Vite React single-page app
+- Supabase Auth, Postgres, RLS, Realtime, Storage
+- Supabase RPCs for sensitive workflow transitions
+- Vitest and Testing Library
+- Sentry packages are installed for production monitoring
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+## Core Product Areas
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+- Authentication and role onboarding
+- Client task posting
+- Specialist marketplace discovery
+- Proposal/bid flow
+- Accepted-work workspace rooms
+- Workspace chat
+- Agreement snapshots and milestones
+- Appointment scheduling
+- Delivery and completion confirmation
+- Reviews and reputation
+- Contact reveal audit trail
+- Dispute filing, evidence, and admin resolution
+- In-app notifications and preferences
+- Platform insights and system telemetry
 
-### `npm test`
+## Local Setup
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+Create a `.env` file in the project root:
 
-### `npm run build`
+```bash
+REACT_APP_SUPABASE_URL=https://your-project.supabase.co
+REACT_APP_SUPABASE_ANON_KEY=your-anon-key
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+Vite-compatible aliases are also supported:
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+```bash
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+Install dependencies:
 
-### `npm run eject`
+```bash
+npm install
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+Run locally:
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+```bash
+npm start
+```
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+Run tests:
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+```bash
+npm test
+```
 
-## Learn More
+Build production assets:
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+```bash
+npm run build
+```
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+Run the standard local quality gate:
 
-### Code Splitting
+```bash
+npm run scan:safety
+npm run verify
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+When Supabase credentials are available, check the live database contracts:
 
-### Analyzing the Bundle Size
+```bash
+npm run smoke:supabase
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+## Supabase Setup
 
-### Making a Progressive Web App
+Apply database changes through `supabase/migrations/` in timestamp order. The current workflow hardening migrations include:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+```text
+supabase/migrations/20260607162500_review_uniqueness_and_marketplace_reputation.sql
+supabase/migrations/20260607163500_close_completed_workspace_messaging.sql
+```
 
-### Advanced Configuration
+Important security model:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+- Normal users can only choose `client` or `specialist`.
+- Platform admins are stored in `public.app_admins`.
+- Admin access is checked through `public.current_user_is_platform_admin()`.
+- Public specialist reads must not expose private contact fields in frontend queries.
+- Bid reads are limited to task owners, bidding specialists, and platform admins.
+- Dispute and resolution writes should happen through validated RPCs or admin-only policies.
 
-### Deployment
+To grant an admin, insert their profile ID into `public.app_admins` using the Supabase service role or dashboard SQL editor.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+## Engineering Priorities
 
-### `npm run build` fails to minify
+Before serious public launch:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+- Move to Next.js when server-rendered public marketplace pages become a priority.
+- Add route-level pages for task details, specialist profiles, workspaces, and admin operations.
+- Add payment/escrow integration before using payment language in production.
+- Replace static telemetry with real health checks and error metrics.
+- Add Sentry initialization and release/environment tagging.
+- Expand tests around posting, bidding, bid acceptance, contact reveal, disputes, completion, and reviews.
+- Add rate limiting and abuse detection for auth, bids, messages, and dispute evidence uploads.
+
+## Production Checklist
+
+- Supabase RLS enabled on every user table.
+- No public `select('*')` for profiles, bids, messages, or dispute data.
+- Admin role cannot be self-assigned from the browser.
+- Contact details are only returned after accepted workspace/contact unlock.
+- Workspace messages are readable only by participants.
+- Realtime channels are removed on room change/unmount.
+- Dispute evidence storage has participant-only upload/read policies.
+- CI runs safety scan, tests, and production build before deploy.
+- Monitoring captures auth errors, RPC failures, realtime disconnects, and dispute/payment events.
+
+## Engineering Maturity
+
+Read `ENGINEERING_MATURITY.md` before changing workspace, bid acceptance, completion, review, or chat behavior. It documents the production contracts, required RPCs, safety checks, and E2E testing roadmap.
+
+## Deployment
+
+The app currently builds to static assets:
+
+```bash
+npm run build
+```
+
+Deploy the generated `dist/` directory to your hosting provider. `vercel.json` handles SPA fallback routing and immutable Vite asset caching.
+
+For a larger platform, prefer a Next.js deployment so public marketplace pages, profile pages, metadata, server-side checks, and protected admin routes can be handled more cleanly.

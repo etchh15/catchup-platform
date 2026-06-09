@@ -42,6 +42,7 @@ export default function NotificationCenter({
       task_completed: '🎉',
       dispute_filed: '⚠️',
       dispute_response: '🔄',
+      dispute_resolved: '✔️',
       review_received: '⭐',
       verification_status: '🔐',
     };
@@ -60,6 +61,7 @@ export default function NotificationCenter({
       task_completed: '#c8e6c9',
       dispute_filed: '#ffe0b2',
       dispute_response: '#f8bbd0',
+      dispute_resolved: '#dcedc8',
       review_received: '#f0f4c3',
       verification_status: '#e1bee7',
     };

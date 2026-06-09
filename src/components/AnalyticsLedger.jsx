@@ -1,7 +1,12 @@
 import React, { useMemo } from 'react';
 import { formatCurrency, STATUS_BADGE_MAP } from '../utils/statusHelpers';
+import AdminDisputeQueue from './AdminDisputeQueue';
+import CatchUpServiceFlow from './CatchUpServiceFlow';
+import { useLanguage } from '../i18n/LanguageContext';
+import AdminBetaOperations from './AdminBetaOperations';
 
-export default function AnalyticsLedger({ tasks = [], bids = [] }) {
+export default function AnalyticsLedger({ tasks = [], bids = [], role }) {
+  const { t } = useLanguage();
   // Derived metrics
   const metrics = useMemo(() => {
     const totalVolume = tasks
@@ -14,6 +19,11 @@ export default function AnalyticsLedger({ tasks = [], bids = [] }) {
     const completedTasks = tasks.filter(t => t.status === 'completed').length;
     const acceptedBids = bids.filter(b => b.status === 'accepted').length;
     const pendingBids = bids.filter(b => b.status === 'pending').length;
+    const disputedTasks = tasks.filter(t => t.status === 'disputed').length;
+    const staleOpenTasks = tasks.filter(t => {
+      if (t.status !== 'open' || !t.created_at) return false;
+      return Date.now() - new Date(t.created_at).getTime() > 24 * 60 * 60 * 1000;
+    }).length;
 
     return {
       totalVolume,
@@ -22,15 +32,67 @@ export default function AnalyticsLedger({ tasks = [], bids = [] }) {
       completedTasks,
       acceptedBids,
       pendingBids,
+      disputedTasks,
+      staleOpenTasks,
     };
   }, [tasks, bids]);
 
   return (
     <div>
-      <div style={{ marginBottom: 28 }}>
-        <h2>Insights</h2>
-        <p style={{ fontSize: 14, color: 'var(--text-2)', margin: 0 }}>Platform activity overview.</p>
+      {role === 'admin' && (
+        <>
+          <AdminBetaOperations />
+          <AdminDisputeQueue />
+        </>
+      )}
+      <div className="insights-hero-panel">
+        <span className="dashboard-kicker">Admin only</span>
+        <h2>{t('insightsTitle', 'Platform operations')}</h2>
+        <p style={{ fontSize: 14, color: 'var(--text-2)', margin: 0 }}>{t('insightsIntro', 'Admin tools for monitoring demand, quotes, disputes, and closeout health.')}</p>
+        <CatchUpServiceFlow role={role} context="insights" activeIndex={2} />
       </div>
+
+      {role === 'admin' && (
+        <div className="admin-ops-grid">
+          <section className="premium-card">
+            <div className="dashboard-panel-head">
+              <span className="dashboard-kicker">Operator queue</span>
+              <span className="dashboard-alert-count">{metrics.disputedTasks + metrics.staleOpenTasks}</span>
+            </div>
+            <div className="admin-ops-list">
+              <div>
+                <strong>{metrics.disputedTasks}</strong>
+                <span>Disputed jobs need admin review</span>
+              </div>
+              <div>
+                <strong>{metrics.staleOpenTasks}</strong>
+                <span>Open jobs older than 24h need marketplace attention</span>
+              </div>
+              <div>
+                <strong>{metrics.activeTasks}</strong>
+                <span>Active workspaces should keep chat, receipt, delivery, and review wired</span>
+              </div>
+            </div>
+          </section>
+
+          <section className="premium-card">
+            <div className="dashboard-panel-head">
+              <span className="dashboard-kicker">VS Code control map</span>
+              <span className="dashboard-alert-count">Runbook</span>
+            </div>
+            <div className="admin-runbook">
+              <code>src/services/supabaseService.js</code>
+              <span>Supabase RPCs, reviews, receipts, disputes, and workspace writes.</span>
+              <code>src/components/ProjectRoom.jsx</code>
+              <span>Chat, completion, review closeout, receipt, and dispute UX.</span>
+              <code>supabase/migrations/</code>
+              <span>Production database changes. Add safe migrations here before deploy.</span>
+              <code>npm run scan:safety && npm test -- --run && npm run build</code>
+              <span>Required quality gate before shipping marketplace fixes.</span>
+            </div>
+          </section>
+        </div>
+      )}
 
       <div className="stats-grid">
         {[

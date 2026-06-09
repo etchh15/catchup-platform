@@ -1,5 +1,20 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
+import {
+  fetchAppointmentByTask,
+  proposeAppointment as proposeAppointmentService,
+  confirmAppointment as confirmAppointmentService,
+  counterProposeAppointment as counterProposeAppointmentService,
+} from '../services/supabaseService';
+
+const normalizeAppointment = (appointment) => {
+  if (!appointment) return appointment;
+  return {
+    ...appointment,
+    status: String(appointment.status || '').toLowerCase(),
+    proposed_date: appointment.proposed_date || appointment.starts_at,
+  };
+};
 
 export function useAppointmentScheduling(taskId, agreementId, userId) {
   const [appointment, setAppointment] = useState(null);
@@ -12,13 +27,7 @@ export function useAppointmentScheduling(taskId, agreementId, userId) {
     const fetchAppointment = async () => {
       setLoading(true);
       try {
-        const { data, error: fetchError } = await supabase
-          .from('appointments')
-          .select('*')
-          .eq('task_id', taskId)
-          .maybeSingle();
-
-        if (fetchError && fetchError.code !== 'PGRST116') throw fetchError;
+        const data = await fetchAppointmentByTask(taskId);
         setAppointment(data || null);
       } catch (err) {
         console.error('Error fetching appointment:', err);
@@ -30,7 +39,6 @@ export function useAppointmentScheduling(taskId, agreementId, userId) {
 
     fetchAppointment();
 
-    // Subscribe to real-time updates
     const subscription = supabase
       .channel(`appointments:task_id=eq.${taskId}`)
       .on(
@@ -43,7 +51,7 @@ export function useAppointmentScheduling(taskId, agreementId, userId) {
         },
         (payload) => {
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-            setAppointment(payload.new);
+            setAppointment(normalizeAppointment(payload.new));
           }
         }
       )
@@ -51,30 +59,15 @@ export function useAppointmentScheduling(taskId, agreementId, userId) {
 
     return () => {
       subscription?.unsubscribe();
+      if (subscription) supabase.removeChannel(subscription);
     };
   }, [taskId]);
 
   const proposeAppointment = useCallback(
-    async (proposedDate, address, notes = '') => {
+    async (proposedDate, address, notes = '', options = {}) => {
       setLoading(true);
       try {
-        const { data, error: insertError } = await supabase
-          .from('appointments')
-          .insert([
-            {
-              task_id: taskId,
-              agreement_id: agreementId,
-              proposed_date: proposedDate,
-              proposed_by: 'specialist',
-              service_address: address,
-              notes,
-              status: 'pending',
-            },
-          ])
-          .select()
-          .single();
-
-        if (insertError) throw insertError;
+        const data = await proposeAppointmentService(taskId, agreementId, proposedDate, 'specialist', address, notes, options);
         setAppointment(data);
         return data;
       } catch (err) {
@@ -94,18 +87,7 @@ export function useAppointmentScheduling(taskId, agreementId, userId) {
 
       setLoading(true);
       try {
-        const { data, error: updateError } = await supabase
-          .from('appointments')
-          .update({
-            status: 'confirmed',
-            confirmed_by: 'client',
-            confirmed_date: new Date().toISOString(),
-          })
-          .eq('id', appointmentId)
-          .select()
-          .single();
-
-        if (updateError) throw updateError;
+        const data = await confirmAppointmentService(appointmentId, 'client');
         setAppointment(data);
         return data;
       } catch (err) {
@@ -120,20 +102,10 @@ export function useAppointmentScheduling(taskId, agreementId, userId) {
   );
 
   const counterPropose = useCallback(
-    async (appointmentId, newDate) => {
+    async (appointmentId, newDate, proposedBy = 'client', address = null, notes = null, options = {}) => {
       setLoading(true);
       try {
-        const { data, error: updateError } = await supabase
-          .from('appointments')
-          .update({
-            proposed_date: newDate,
-            status: 'rescheduled',
-          })
-          .eq('id', appointmentId)
-          .select()
-          .single();
-
-        if (updateError) throw updateError;
+        const data = await counterProposeAppointmentService(appointmentId, newDate, proposedBy, address, notes, options);
         setAppointment(data);
         return data;
       } catch (err) {

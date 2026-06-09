@@ -1,14 +1,20 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 
-export function useContactVisibility(userId, otherUserId, roomId) {
+export function useContactVisibility(userId, otherUserId, roomId, workspaceStatus = 'pending') {
   const [isContactRevealed, setIsContactRevealed] = useState(false);
   const [revealedAt, setRevealedAt] = useState(null);
   const [loading, setLoading] = useState(false);
+  const canRevealContact = workspaceStatus === 'active';
 
   // Check if contact has been revealed
   useEffect(() => {
-    if (!userId || !otherUserId || !roomId) return;
+    if (!userId || !otherUserId || !roomId || !canRevealContact) {
+      setIsContactRevealed(false);
+      setRevealedAt(null);
+      setLoading(false);
+      return;
+    }
 
     const checkContactReveal = async () => {
       try {
@@ -51,12 +57,13 @@ export function useContactVisibility(userId, otherUserId, roomId) {
 
     return () => {
       subscription?.unsubscribe();
+      if (subscription) supabase.removeChannel(subscription);
     };
-  }, [userId, otherUserId, roomId]);
+  }, [userId, otherUserId, roomId, canRevealContact]);
 
   // Reveal contact details and log access
   const revealContact = useCallback(async () => {
-    if (!userId || !otherUserId || !roomId) return;
+    if (!userId || !otherUserId || !roomId || !canRevealContact) return;
 
     setLoading(true);
 
@@ -93,7 +100,7 @@ export function useContactVisibility(userId, otherUserId, roomId) {
     } finally {
       setLoading(false);
     }
-  }, [userId, otherUserId, roomId]);
+  }, [userId, otherUserId, roomId, canRevealContact]);
 
   return {
     isContactRevealed,
@@ -111,9 +118,12 @@ export function useWorkspaceContact(userId, otherUserId, workspaceStatus = 'pend
   useEffect(() => {
     if (!otherUserId) return;
 
-    // Only show contact if workspace is accepted
-    if (workspaceStatus !== 'accepted') {
+// Only active workspaces may expose contact information. Completed deals return
+// to protected mode so participants cannot keep sharing direct details here.
+  const acceptedStatuses = ['active'];
+  if (!acceptedStatuses.includes(workspaceStatus)) {
       setContactInfo(null);
+      setLoading(false);
       return;
     }
 
@@ -123,14 +133,20 @@ export function useWorkspaceContact(userId, otherUserId, workspaceStatus = 'pend
       try {
         const { data, error } = await supabase
           .from('profiles')
-          .select('id, full_name, phone, email, whatsapp, avatar_url')
+          .select('id, full_name, phone_number, email_address, avatar_url, portfolio_images')
           .eq('id', otherUserId)
           .maybeSingle();
 
         if (error) {
           console.error('Error fetching contact info:', error);
-        } else {
-          setContactInfo(data);
+        } else if (data) {
+          setContactInfo({
+            ...data,
+            phone: data.phone_number ?? null,
+            whatsapp: data.phone_number ?? null,
+            email: data.email_address ?? null,
+            avatar_url: data.avatar_url || (Array.isArray(data.portfolio_images) ? data.portfolio_images[0] : null),
+          });
         }
       } catch (err) {
         console.error('Error in useWorkspaceContact:', err);

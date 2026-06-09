@@ -1,12 +1,10 @@
 import { supabase } from '../supabaseClient';
 
 export const getParticipantId = (user, role) => {
-  const base = user?.participantUuid ?? user?.id ?? 'guest';
-  return role === 'client' ? `client-${base}` : `specialist-${base}`;
+  return user?.id ?? null;
 };
 
-export const getCounterpartyId = (role) =>
-  role === 'client' ? 'specialist-1' : 'client-1';
+export const getCounterpartyId = () => null;
 
 export const mapRowToChatMessage = (row, participantId) => ({
   id: row.id,
@@ -28,6 +26,10 @@ export async function fetchTaskMessages(taskId) {
 }
 
 export async function sendTaskMessage({ taskId, senderId, receiverId, text }) {
+  if (!receiverId) {
+    throw new Error('Private task messages require a recipient.');
+  }
+
   const { data, error } = await supabase
     .from('messages')
     .insert({

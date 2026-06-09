@@ -1,22 +1,36 @@
 import React, { useState, useRef } from 'react';
-import { useDisputeEvidence } from '../hooks/useDispute';
+import { useToast } from './Toast';
 
 export default function DisputeForm({ taskId, onDisputeFiled, onCancel, loading }) {
+  const toast = useToast();
   const [reason, setReason] = useState('');
   const [category, setCategory] = useState('quality');
   const [selectedFiles, setSelectedFiles] = useState([]);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const [fileError, setFileError] = useState(null);
   const fileInputRef = useRef(null);
-  const { uploadEvidence, uploading } = useDisputeEvidence();
+  const uploading = loading;
 
-  const CATEGORIES = ['quality', 'no_show', 'incomplete', 'other'];
+  const CATEGORIES = [
+    { value: 'quality', label: 'Quality not as agreed' },
+    { value: 'no_show', label: "Specialist didn't show up" },
+    { value: 'incomplete', label: 'Work incomplete' },
+    { value: 'other', label: 'Other' },
+  ];
 
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files);
     if (selectedFiles.length + files.length > 5) {
-      alert('Maximum 5 files allowed');
+      setFileError('Maximum 5 files allowed');
       return;
     }
+
+    const oversized = files.find((file) => file.size > 5 * 1024 * 1024);
+    if (oversized) {
+      setFileError(`File ${oversized.name} is too large (max 5MB)`);
+      return;
+    }
+
+    setFileError(null);
     setSelectedFiles([...selectedFiles, ...files]);
   };
 
@@ -28,31 +42,24 @@ export default function DisputeForm({ taskId, onDisputeFiled, onCancel, loading 
     e.preventDefault();
 
     if (!reason.trim()) {
-      alert('Please enter a dispute reason');
+      toast('Please enter a dispute reason', 'warning');
       return;
     }
 
     try {
-      // File dispute will be created in parent component
-      // Here we just pass the data
-      let uploadedEvidence = null;
-
-      if (selectedFiles.length > 0) {
-        uploadedEvidence = await uploadEvidence(taskId, selectedFiles);
-      }
-
       await onDisputeFiled({
         reason,
         category,
-        evidence: uploadedEvidence,
+        files: selectedFiles,
       });
 
-      // Reset form
       setReason('');
       setCategory('quality');
       setSelectedFiles([]);
+      setFileError(null);
     } catch (err) {
-      console.error('Error:', err);
+      console.error('Error filing dispute:', err);
+      toast('Failed to file dispute: ' + (err?.message || 'Unknown error'), 'error');
     }
   };
 
@@ -68,10 +75,11 @@ export default function DisputeForm({ taskId, onDisputeFiled, onCancel, loading 
           style={styles.input}
           disabled={loading || uploading}
         >
-          <option value="quality">Quality not as agreed</option>
-          <option value="no_show">Specialist didn't show up</option>
-          <option value="incomplete">Work incomplete</option>
-          <option value="other">Other</option>
+          {CATEGORIES.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -129,9 +137,9 @@ export default function DisputeForm({ taskId, onDisputeFiled, onCancel, loading 
         )}
       </div>
 
-      {uploading && (
-        <div style={styles.progress}>
-          Uploading evidence... {uploadProgress}%
+      {fileError && (
+        <div style={{ ...styles.progress, color: '#b91c1c' }}>
+          {fileError}
         </div>
       )}
 
@@ -158,9 +166,9 @@ export default function DisputeForm({ taskId, onDisputeFiled, onCancel, loading 
 
 const styles = {
   form: {
-    background: 'white',
-    border: '1px solid #e5e7eb',
-    borderRadius: '8px',
+    background: 'rgba(217, 79, 79, 0.08)',
+    border: '1px solid rgba(217, 79, 79, 0.28)',
+    borderRadius: '12px',
     padding: '20px',
     display: 'flex',
     flexDirection: 'column',
@@ -169,7 +177,8 @@ const styles = {
   title: {
     margin: '0 0 12px 0',
     fontSize: '16px',
-    fontWeight: '600',
+    fontWeight: '700',
+    color: 'var(--text)',
   },
   field: {
     display: 'flex',
@@ -178,20 +187,24 @@ const styles = {
   },
   label: {
     fontSize: '13px',
-    fontWeight: '500',
-    color: '#666',
+    fontWeight: '700',
+    color: 'var(--text-2)',
   },
   input: {
     padding: '10px',
-    border: '1px solid #d1d5db',
-    borderRadius: '4px',
+    background: 'var(--bg-soft)',
+    color: 'var(--text)',
+    border: '1px solid var(--border-strong)',
+    borderRadius: '8px',
     fontSize: '14px',
     fontFamily: 'inherit',
   },
   textarea: {
     padding: '10px',
-    border: '1px solid #d1d5db',
-    borderRadius: '4px',
+    background: 'var(--bg-soft)',
+    color: 'var(--text)',
+    border: '1px solid var(--border-strong)',
+    borderRadius: '8px',
     fontSize: '14px',
     fontFamily: 'inherit',
     resize: 'vertical',
@@ -204,11 +217,12 @@ const styles = {
   uploadBtn: {
     flex: 1,
     padding: '10px',
-    background: '#f3f4f6',
-    border: '1px solid #d1d5db',
-    borderRadius: '4px',
+    background: 'var(--surface-2)',
+    color: 'var(--text)',
+    border: '1px solid var(--border)',
+    borderRadius: '8px',
     fontSize: '13px',
-    fontWeight: '500',
+    fontWeight: '700',
     cursor: 'pointer',
     transition: 'background 0.2s',
   },
@@ -222,8 +236,10 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '8px',
-    background: '#f9fafb',
-    borderRadius: '4px',
+    background: 'rgba(8, 12, 20, 0.42)',
+    color: 'var(--text-2)',
+    border: '1px solid var(--border)',
+    borderRadius: '8px',
     fontSize: '13px',
   },
   removeBtn: {
@@ -236,10 +252,11 @@ const styles = {
   },
   progress: {
     fontSize: '13px',
-    color: '#666',
+    color: 'var(--text-2)',
     padding: '8px',
-    background: '#f3f4f6',
-    borderRadius: '4px',
+    background: 'rgba(8, 12, 20, 0.42)',
+    border: '1px solid var(--border)',
+    borderRadius: '8px',
   },
   buttons: {
     display: 'flex',
@@ -249,10 +266,10 @@ const styles = {
   cancelBtn: {
     flex: 1,
     padding: '10px',
-    background: 'white',
-    color: '#666',
-    border: '1px solid #d1d5db',
-    borderRadius: '4px',
+    background: 'var(--surface-2)',
+    color: 'var(--text-2)',
+    border: '1px solid var(--border)',
+    borderRadius: '8px',
     fontSize: '13px',
     fontWeight: '600',
     cursor: 'pointer',
@@ -260,12 +277,12 @@ const styles = {
   submitBtn: {
     flex: 1,
     padding: '10px',
-    background: '#ef4444',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
+    background: 'var(--red-dim)',
+    color: '#fca5a5',
+    border: '1px solid var(--red-border)',
+    borderRadius: '8px',
     fontSize: '13px',
-    fontWeight: '600',
+    fontWeight: '800',
     cursor: 'pointer',
   },
 };

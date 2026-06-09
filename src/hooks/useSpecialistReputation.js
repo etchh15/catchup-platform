@@ -70,6 +70,7 @@ export function useSpecialistReputation(specialistId) {
 
     return () => {
       subscription?.unsubscribe();
+      if (subscription) supabase.removeChannel(subscription);
     };
   }, [specialistId, fetchReputation]);
 

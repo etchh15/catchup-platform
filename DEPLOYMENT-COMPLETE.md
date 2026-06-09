@@ -1,8 +1,8 @@
-# 🚀 CatchUp Platform - Complete Implementation Ready
+# 🚀 CatchUp Platform - Deployment Notes (Accurate)
 
-**Status:** ✅ **PRODUCTION READY**  
-**Date:** May 29, 2026  
-**Phases Complete:** 1-4 ✅
+**Status:** Implementation artifacts for Phases 1-4 are present in the repository. Deployment requires applying and verifying Supabase migrations and finishing several cross-cutting sessions (notifications, prefs, contact polish, tests). Not production-ready until verification.
+**Date:** June 2, 2026
+**Phases Present in Repo:** 1-4 (code + migrations) — live verification required
 
 ---
 
@@ -41,25 +41,20 @@ This will add:
 - `jspdf` - PDF generation
 - `html2canvas` - HTML to image conversion
 
-### Step 2: Run Database Migration (5 minutes)
+### Step 2: Run Database Migrations (apply order & verification)
 
-1. Go to [Supabase Dashboard](https://supabase.com/dashboard)
-2. Select your CatchUp project
-3. Click **SQL Editor** → **New Query**
-4. Open file: `supabase/phase-2-3-4-migrations.sql`
-5. Copy **ALL** contents
-6. Paste into Supabase SQL Editor
-7. Click **RUN**
+Follow this apply order to avoid drift and RPC/patch conflicts. After running each file, use `supabase/verify-schema.sql` to validate the live schema.
 
-**Verification:** Check Supabase dashboard → Tables. You should see new tables:
-- `agreements`
-- `dispute_responses`
-- `dispute_resolutions`
-- `completion_log`
-- `agreement_milestones`
-- `appointments`
-- `client_reputation`
-- `specialist_client_ratings`
+1. `supabase/catchup-full-schema.sql` — base MVP tables and auth integration
+2. `supabase/phase-1-migrations.sql` — notifications, reputation, contact access log
+3. `supabase/phase-2-3-4-migrations.sql` — agreements, disputes, milestones, appointments, receipts
+4. `supabase/phase-2-3-4-patch-accept-bid.sql` — patch to `accept_bid` RPC (creates agreement + milestones)
+5. `supabase/phase-11-notification-triggers.sql` — DB triggers to create in-app notifications for bids and workspace messages
+5. `supabase/setup-realtime-and-specialists.sql` — realtime publications and specialist metric setup
+6. Optional fixes / patches: `supabase/fix-*.sql` as needed (see repo)
+7. Run `supabase/verify-schema.sql` and confirm all expected tables, columns, and RLS policies exist.
+
+For each step: open the file in the repo, copy the contents into Supabase SQL Editor, run, then run the `verify-schema.sql` checks. Typical tables to confirm include `agreements`, `agreement_milestones`, `appointments`, `dispute_responses`, `completion_receipts`, and `client_reputation`.
 
 ### Step 3: Update ProjectRoom Component (20 minutes)
 

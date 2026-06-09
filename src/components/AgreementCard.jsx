@@ -1,10 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './AgreementCard.css';
 
 export default function AgreementCard({ agreement, isEditing, onUpdate, loading }) {
   const [editValues, setEditValues] = useState({
     expected_delivery_date: agreement?.expected_delivery_date || '',
   });
+
+  useEffect(() => {
+    setEditValues({
+      expected_delivery_date: agreement?.expected_delivery_date || '',
+    });
+  }, [agreement?.expected_delivery_date]);
 
   if (!agreement) {
     return null;
@@ -37,12 +43,13 @@ export default function AgreementCard({ agreement, isEditing, onUpdate, loading 
       currency: 'EGP',
     }).format(amount);
   };
+  const agreementId = agreement.id ? String(agreement.id).substring(0, 8).toUpperCase() : 'PENDING';
 
   return (
     <div className="agreement-card">
       <div className="agreement-header">
         <div className="agreement-title">📋 Contract Agreement</div>
-        <div className="agreement-id">ID: {agreement.id.substring(0, 8).toUpperCase()}</div>
+        <div className="agreement-id">ID: {agreementId}</div>
       </div>
 
       <div className="agreement-body">

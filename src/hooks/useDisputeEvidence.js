@@ -24,18 +24,18 @@ export function useDisputeEvidence(disputeId) {
           }
 
           const filename = `${Date.now()}-${Math.random().toString(36).substring(7)}-${file.name}`;
-          const filePath = `disputes/${disputeId}/${filename}`;
+          const filePath = `${disputeId}/${filename}`;
 
           // Upload file to Supabase Storage
           const { error: uploadError } = await supabase.storage
-            .from('dispute-evidence')
+            .from('disputes')
             .upload(filePath, file, { upsert: false });
 
           if (uploadError) throw uploadError;
 
           // Get public URL
           const { data: urlData } = supabase.storage
-            .from('dispute-evidence')
+            .from('disputes')
             .getPublicUrl(filePath);
 
           uploadedEvidence.push({

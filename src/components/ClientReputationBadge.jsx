@@ -1,4 +1,5 @@
 import React from 'react';
+import { getClientSeriousnessSummary } from '../utils/lifecycleInsights';
 
 export default function ClientReputationBadge({ reputation, compact = false }) {
   if (!reputation) {
@@ -36,22 +37,16 @@ export default function ClientReputationBadge({ reputation, compact = false }) {
       icon: '✓',
     },
   ];
+  const seriousnessBadges = getClientSeriousnessSummary(reputation);
 
   if (compact) {
     return (
       <div style={styles.compactContainer}>
-        <div style={{ ...styles.compactItem, borderColor: getCompletionColor(reputation.completion_rate) }}>
-          <span style={styles.compactLabel}>Completion</span>
-          <span style={styles.compactValue}>{reputation.completion_rate}%</span>
-        </div>
-        <div style={styles.compactItem}>
-          <span style={styles.compactLabel}>Rating</span>
-          <span style={styles.compactValue}>
-            {reputation.average_rating_from_specialists > 0
-              ? `${reputation.average_rating_from_specialists.toFixed(1)} ⭐`
-              : 'New'}
-          </span>
-        </div>
+        {seriousnessBadges.length > 0 ? seriousnessBadges.map((badge) => (
+          <span key={badge} style={styles.compactBadge}>{badge}</span>
+        )) : (
+          <span style={styles.compactBadge}>New client</span>
+        )}
       </div>
     );
   }
@@ -80,6 +75,9 @@ export default function ClientReputationBadge({ reputation, compact = false }) {
       </div>
 
       <div style={styles.badges}>
+        {seriousnessBadges.map((badge) => (
+          <span key={badge} style={styles.badge}>{badge}</span>
+        ))}
         {reputation.phone_verified && (
           <span style={styles.badge}>✓ Phone Verified</span>
         )}
@@ -155,6 +153,7 @@ const styles = {
   compactContainer: {
     display: 'flex',
     gap: '8px',
+    flexWrap: 'wrap',
   },
   compactItem: {
     flex: 1,
@@ -175,5 +174,14 @@ const styles = {
     fontSize: '13px',
     fontWeight: '700',
     color: 'var(--text)',
+  },
+  compactBadge: {
+    fontSize: '11px',
+    fontWeight: '650',
+    color: '#d1fae5',
+    border: '1px solid rgba(34,197,94,0.28)',
+    background: 'rgba(34,197,94,0.08)',
+    padding: '4px 8px',
+    borderRadius: '6px',
   },
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 export default function DisputeThread({ dispute, responses, currentUserId, onRespond, loading }) {
   const [replyMessage, setReplyMessage] = useState('');
@@ -152,9 +152,9 @@ export default function DisputeThread({ dispute, responses, currentUserId, onRes
 
 const styles = {
   container: {
-    background: 'white',
-    border: '1px solid #fecaca',
-    borderRadius: '8px',
+    background: 'rgba(217, 79, 79, 0.08)',
+    border: '1px solid rgba(217, 79, 79, 0.28)',
+    borderRadius: '12px',
     overflow: 'hidden',
   },
   header: {
@@ -162,18 +162,19 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '16px',
-    background: '#fef2f2',
-    borderBottom: '1px solid #fecaca',
+    background: 'rgba(8, 12, 20, 0.38)',
+    borderBottom: '1px solid rgba(217, 79, 79, 0.18)',
   },
   title: {
     margin: 0,
     fontSize: '14px',
     fontWeight: '600',
+    color: 'var(--text)',
   },
   status: {
     fontSize: '12px',
-    background: '#ef4444',
-    color: 'white',
+    background: 'var(--red-dim)',
+    color: '#fca5a5',
     padding: '4px 8px',
     borderRadius: '4px',
   },
@@ -185,39 +186,39 @@ const styles = {
   },
   message: {
     padding: '12px',
-    background: '#f9fafb',
-    borderRadius: '6px',
-    border: '1px solid #e5e7eb',
+    background: 'rgba(8, 12, 20, 0.42)',
+    borderRadius: '10px',
+    border: '1px solid var(--border)',
   },
   messageMeta: {
     display: 'flex',
-    justify Content: 'space-between',
+    justifyContent: 'space-between',
     marginBottom: '8px',
   },
   author: {
     fontSize: '12px',
     fontWeight: '600',
-    color: '#374151',
+    color: 'var(--text)',
   },
   time: {
     fontSize: '12px',
-    color: '#9ca3af',
+    color: 'var(--text-3)',
   },
   messageText: {
     margin: '0 0 8px 0',
     fontSize: '13px',
-    color: '#1f2937',
+    color: 'var(--text-2)',
     lineHeight: '1.5',
   },
   evidence: {
     marginTop: '12px',
     paddingTop: '12px',
-    borderTop: '1px solid #e5e7eb',
+    borderTop: '1px solid var(--border)',
   },
   evidenceLabel: {
     fontSize: '12px',
     fontWeight: '600',
-    color: '#666',
+    color: 'var(--text-2)',
     display: 'block',
     marginBottom: '8px',
   },
@@ -229,7 +230,7 @@ const styles = {
   imageLink: {
     overflow: 'hidden',
     borderRadius: '4px',
-    border: '1px solid #d1d5db',
+    border: '1px solid var(--border)',
   },
   image: {
     width: '100%',
@@ -240,26 +241,28 @@ const styles = {
   replyBtn: {
     margin: '12px 16px',
     padding: '10px 16px',
-    background: '#3b82f6',
+    background: 'var(--blue)',
     color: 'white',
     border: 'none',
-    borderRadius: '4px',
+    borderRadius: '8px',
     fontSize: '13px',
     fontWeight: '600',
     cursor: 'pointer',
   },
   replyForm: {
     padding: '16px',
-    background: '#f0f9ff',
-    borderTop: '1px solid #e5e7eb',
+    background: 'rgba(59, 130, 246, 0.08)',
+    borderTop: '1px solid var(--border)',
     display: 'flex',
     flexDirection: 'column',
     gap: '12px',
   },
   textarea: {
     padding: '10px',
-    border: '1px solid #d1d5db',
-    borderRadius: '4px',
+    background: 'var(--bg-soft)',
+    color: 'var(--text)',
+    border: '1px solid var(--border-strong)',
+    borderRadius: '8px',
     fontFamily: 'inherit',
     fontSize: '13px',
     resize: 'vertical',
@@ -272,10 +275,10 @@ const styles = {
   cancelBtn: {
     flex: 1,
     padding: '8px',
-    background: 'white',
-    color: '#666',
-    border: '1px solid #d1d5db',
-    borderRadius: '4px',
+    background: 'var(--surface-2)',
+    color: 'var(--text-2)',
+    border: '1px solid var(--border)',
+    borderRadius: '8px',
     fontSize: '13px',
     fontWeight: '500',
     cursor: 'pointer',
@@ -286,7 +289,7 @@ const styles = {
     background: '#3b82f6',
     color: 'white',
     border: 'none',
-    borderRadius: '4px',
+    borderRadius: '8px',
     fontSize: '13px',
     fontWeight: '600',
     cursor: 'pointer',

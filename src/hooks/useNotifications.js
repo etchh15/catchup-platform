@@ -75,6 +75,7 @@ export function useNotifications(userId) {
 
     return () => {
       subscription?.unsubscribe();
+      if (subscription) supabase.removeChannel(subscription);
     };
   }, [userId, fetchNotifications]);
 

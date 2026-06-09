@@ -43,10 +43,12 @@ export function useMilestones(agreementId, userId) {
         },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            setMilestones([...milestones, payload.new].sort((a, b) => a.milestone_number - b.milestone_number));
+            setMilestones((prevMilestones) =>
+              [...prevMilestones, payload.new].sort((a, b) => a.milestone_number - b.milestone_number)
+            );
           } else if (payload.eventType === 'UPDATE') {
-            setMilestones(
-              milestones.map((m) => (m.id === payload.new.id ? payload.new : m))
+            setMilestones((prevMilestones) =>
+              prevMilestones.map((m) => (m.id === payload.new.id ? payload.new : m))
             );
           }
         }
@@ -55,6 +57,7 @@ export function useMilestones(agreementId, userId) {
 
     return () => {
       subscription?.unsubscribe();
+      if (subscription) supabase.removeChannel(subscription);
     };
   }, [agreementId]);
 

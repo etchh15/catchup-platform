@@ -1,7 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
-export function useDispute(taskId, userId) {
+export function useDispute(taskId) {
   const [dispute, setDispute] = useState(null);
   const [responses, setResponses] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -14,6 +14,8 @@ export function useDispute(taskId, userId) {
         .from('disputes')
         .select('*')
         .eq('task_id', taskId)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       setDispute(disputeData || null);
@@ -40,18 +42,12 @@ export function useDispute(taskId, userId) {
       setLoading(true);
       try {
         const { data, error: fileError } = await supabase
-          .from('disputes')
-          .insert([
-            {
-              task_id: taskId,
-              filed_by: userId,
-              reason,
-              reason_category: reasonCategory,
-              status: 'open',
-            },
-          ])
-          .select()
-          .single();
+          .rpc('file_task_dispute', {
+            p_task_id: taskId,
+            p_reason: reason,
+            p_reason_category: reasonCategory,
+            p_referenced_message_id: null,
+          });
 
         if (fileError) throw fileError;
 
@@ -65,7 +61,7 @@ export function useDispute(taskId, userId) {
         setLoading(false);
       }
     },
-    [taskId, userId]
+    [taskId]
   );
 
   const respondToDispute = useCallback(
@@ -75,21 +71,15 @@ export function useDispute(taskId, userId) {
       setLoading(true);
       try {
         const { data, error: respondError } = await supabase
-          .from('dispute_responses')
-          .insert([
-            {
-              dispute_id: dispute.id,
-              responder_id: userId,
-              message,
-              evidence,
-            },
-          ])
-          .select()
-          .single();
+          .rpc('respond_to_task_dispute', {
+            p_dispute_id: dispute.id,
+            p_message: message,
+            p_evidence: evidence,
+          });
 
         if (respondError) throw respondError;
 
-        setResponses([...responses, data]);
+        setResponses((prevResponses) => [...prevResponses, data]);
         return data;
       } catch (err) {
         console.error('Error responding to dispute:', err);
@@ -99,8 +89,36 @@ export function useDispute(taskId, userId) {
         setLoading(false);
       }
     },
-    [dispute, userId, responses]
+    [dispute]
   );
+
+  useEffect(() => {
+    if (!dispute?.id) return;
+
+    const channel = supabase
+      .channel(`dispute-responses:${dispute.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'dispute_responses',
+          filter: `dispute_id=eq.${dispute.id}`,
+        },
+        (payload) => {
+          const newResponse = payload.new;
+          setResponses((prev) => {
+            if (prev.some((item) => item.id === newResponse.id)) return prev;
+            return [...prev, newResponse];
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [dispute?.id]);
 
   return { dispute, responses, loading, error, fetchDispute, fileDispute, respondToDispute };
 }

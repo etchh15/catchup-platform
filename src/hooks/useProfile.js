@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   fetchUserProfile,
   createUserProfile,
+  currentUserIsPlatformAdmin,
   updateUserRole,
 } from '../services/supabaseService';
 
@@ -9,6 +10,22 @@ export function useProfile(user) {
   const [profile, setProfile] = useState(null);
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  const refreshProfile = useCallback(async () => {
+    if (!user) {
+      setProfile(null);
+      setRole(null);
+      return null;
+    }
+
+    const [data, isAdmin] = await Promise.all([
+      fetchUserProfile(user.id),
+      currentUserIsPlatformAdmin(),
+    ]);
+    setProfile(data);
+    setRole(isAdmin ? 'admin' : data?.role ?? null);
+    return data;
+  }, [user]);
 
   // Fetch or create profile
   useEffect(() => {
@@ -19,17 +36,13 @@ export function useProfile(user) {
     }
 
     setLoading(true);
-    fetchUserProfile(user.id)
-      .then((data) => {
-        setProfile(data);
-        setRole(data?.role ?? null);
-      })
+    refreshProfile()
       .catch(() => {
         setProfile(null);
         setRole(null);
       })
       .finally(() => setLoading(false));
-  }, [user]);
+  }, [user, refreshProfile]);
 
   const setupRole = async (chosenRole) => {
     if (!user) return;
@@ -51,6 +64,7 @@ export function useProfile(user) {
 
   const switchRole = async (newRole) => {
     if (!user) return;
+    if (!['client', 'specialist'].includes(newRole)) return;
 
     setLoading(true);
     try {
@@ -62,5 +76,5 @@ export function useProfile(user) {
     }
   };
 
-  return { profile, role, loading, setupRole, switchRole };
+  return { profile, role, loading, setupRole, switchRole, refreshProfile };
 }

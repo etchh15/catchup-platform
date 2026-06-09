@@ -29,7 +29,7 @@ export default function IdentitySelection({ onSelectComplete, isLoading }) {
           >
             <div className="icon">🛠️</div>
             <h4>I want to work</h4>
-            <p>Bid on local jobs and grow your business</p>
+            <p>Apply for manual beta review before sending proposals</p>
           </div>
         </div>
 

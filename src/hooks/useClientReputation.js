@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
 export function useClientReputation(clientId) {
@@ -48,8 +48,9 @@ export function useClientReputation(clientId) {
     fetchReputation();
 
     // Subscribe to real-time updates
+    const channelName = `client_reputation:client_id=eq.${clientId}:${Math.random().toString(36).slice(2)}`;
     const subscription = supabase
-      .channel(`client_reputation:client_id=eq.${clientId}`)
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -68,6 +69,7 @@ export function useClientReputation(clientId) {
 
     return () => {
       subscription?.unsubscribe();
+      if (subscription) supabase.removeChannel(subscription);
     };
   }, [clientId]);
 

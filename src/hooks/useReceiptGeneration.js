@@ -1,10 +1,12 @@
 import { useCallback } from 'react';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 
 export function useReceiptGeneration() {
   const generateAndDownloadPDF = useCallback(async (receiptElementId, agreementId) => {
     try {
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ]);
       const element = document.getElementById(receiptElementId);
       if (!element) {
         throw new Error('Receipt element not found');

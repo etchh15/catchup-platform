@@ -17,9 +17,11 @@ export function useAgreement(taskId, userId) {
           .from('agreements')
           .select('*')
           .eq('task_id', taskId)
-          .single();
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-        if (fetchError && fetchError.code !== 'PGRST116') {
+        if (fetchError) {
           throw fetchError;
         }
 
@@ -57,6 +59,7 @@ export function useAgreement(taskId, userId) {
 
     return () => {
       subscription?.unsubscribe();
+      if (subscription) supabase.removeChannel(subscription);
     };
   }, [taskId, userId]);
 
