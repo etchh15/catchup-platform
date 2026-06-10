@@ -1253,7 +1253,6 @@ export default function Marketplace({
                   type="submit"
                   disabled={posting}
                   className="btn btn-primary"
-                  style={{ background: 'var(--gold)' }}
                 >
                   {posting ? 'Posting…' : 'Post job'}
                 </button>
