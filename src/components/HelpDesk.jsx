@@ -33,6 +33,7 @@ const statusLabels = {
 
 export default function HelpDesk({ user, role }) {
   const toast = useToast();
+  const isAdmin = role === 'admin';
   const [cases, setCases] = useState([]);
   const [messages, setMessages] = useState([]);
   const [activeCaseId, setActiveCaseId] = useState('');
@@ -40,6 +41,8 @@ export default function HelpDesk({ user, role }) {
   const [messageLoading, setMessageLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [caseStatusFilter, setCaseStatusFilter] = useState('active');
+  const [showNewCaseForm, setShowNewCaseForm] = useState(false);
+  const [handoffCaseId, setHandoffCaseId] = useState('');
   const [draft, setDraft] = useState({
     category: 'general',
     priority: 'normal',
@@ -56,7 +59,12 @@ export default function HelpDesk({ user, role }) {
   const loadCases = async () => {
     setLoading(true);
     try {
-      const rows = await fetchHelpCases({ role, userId: user?.id, status: caseStatusFilter, limit: 80 });
+      const rows = await fetchHelpCases({
+        role,
+        userId: user?.id,
+        status: isAdmin ? caseStatusFilter : 'all',
+        limit: 80,
+      });
       setCases(rows);
       setActiveCaseId((current) => (rows.some((item) => item.id === current) ? current : rows[0]?.id || ''));
     } catch (err) {
@@ -100,9 +108,10 @@ export default function HelpDesk({ user, role }) {
         ...draft,
       });
       setDraft({ category: 'general', priority: 'normal', subject: '', body: '' });
-      setCaseStatusFilter('active');
       await loadCases();
       setActiveCaseId(created.id);
+      setHandoffCaseId(created.id);
+      setShowNewCaseForm(false);
       toast('Help case opened. Admin can now reply privately.', 'success');
     } catch (err) {
       toast('Could not open help case: ' + (err?.message || 'Unknown error'), 'error');
@@ -133,7 +142,7 @@ export default function HelpDesk({ user, role }) {
   };
 
   const handleStatusChange = async (status) => {
-    if (!activeCase) return;
+    if (!isAdmin || !activeCase) return;
     setBusy(true);
     try {
       await updateHelpCaseStatus(activeCase.id, status);
@@ -151,37 +160,43 @@ export default function HelpDesk({ user, role }) {
       <div className="dashboard-panel-head">
         <div>
           <span className="dashboard-kicker">Help Desk</span>
-          <h2>{role === 'admin' ? 'Private user support cases' : 'Get help from CatchUp'}</h2>
+          <h2>{isAdmin ? 'Private user support cases' : 'Get help from CatchUp'}</h2>
           <p className="dashboard-muted">
-            {role === 'admin'
+            {isAdmin
               ? 'Review private user cases, reply as platform admin, and close support loops.'
               : 'Open a private case for account, verification, job, payment, dispute, or safety support.'}
           </p>
         </div>
         <div className="help-desk-filter">
-          <select className="premium-input" value={caseStatusFilter} onChange={(event) => setCaseStatusFilter(event.target.value)}>
-            <option value="active">Active</option>
-            <option value="open">Open only</option>
-            <option value="waiting_on_user">Waiting on user</option>
-            <option value="resolved">Resolved</option>
-            <option value="all">All cases</option>
-          </select>
+          {isAdmin ? (
+            <select className="premium-input" value={caseStatusFilter} onChange={(event) => setCaseStatusFilter(event.target.value)}>
+              <option value="active">Active</option>
+              <option value="open">Open only</option>
+              <option value="waiting_on_user">Waiting on user</option>
+              <option value="resolved">Resolved</option>
+              <option value="all">All cases</option>
+            </select>
+          ) : cases.length > 0 ? (
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => setShowNewCaseForm((current) => !current)}>
+              {showNewCaseForm ? 'Close case form' : 'Open another case'}
+            </button>
+          ) : null}
           <button type="button" className="btn btn-secondary btn-sm" onClick={loadCases} disabled={loading}>
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
       </div>
 
-      <div className="help-desk-grid">
+      <div className={`help-desk-grid${!isAdmin && !showNewCaseForm ? ' support-focused' : ''}`}>
         <aside className="premium-card help-case-list" aria-label="Help cases">
           <div className="dashboard-panel-head compact">
-            <span className="dashboard-kicker">Cases</span>
+            <span className="dashboard-kicker">{isAdmin ? 'Cases' : 'Your cases'}</span>
             <span className="dashboard-alert-count">{cases.length}</span>
           </div>
           {loading ? (
             <p className="dashboard-muted">Loading cases...</p>
           ) : cases.length === 0 ? (
-            <p className="dashboard-muted">No help cases yet.</p>
+            <p className="dashboard-muted">No help cases yet. Open one below and admin will reply privately.</p>
           ) : cases.map((item) => (
             <button
               type="button"
@@ -191,7 +206,7 @@ export default function HelpDesk({ user, role }) {
             >
               <strong>{item.subject}</strong>
               <span>{statusLabels[item.status] || item.status} · {item.category} · {item.priority}</span>
-              {role === 'admin' && <em>{item.profiles?.full_name || item.profiles?.email || 'User'}</em>}
+              {isAdmin && <em>{item.profiles?.full_name || item.profiles?.email || 'User'}</em>}
               <small>{formatDate(item.last_message_at)}</small>
             </button>
           ))}
@@ -206,10 +221,10 @@ export default function HelpDesk({ user, role }) {
                   <h3>{activeCase.subject}</h3>
                   <p>
                     {statusLabels[activeCase.status] || activeCase.status} · {activeCase.priority}
-                    {role === 'admin' && ` · ${activeCase.profiles?.email || 'unknown user'}`}
+                    {isAdmin && ` · ${activeCase.profiles?.email || 'unknown user'}`}
                   </p>
                 </div>
-                {role === 'admin' && (
+                {isAdmin && (
                   <div className="help-case-actions">
                     <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => handleStatusChange('open')}>Open</button>
                     <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => handleStatusChange('waiting_on_user')}>Waiting</button>
@@ -217,6 +232,13 @@ export default function HelpDesk({ user, role }) {
                   </div>
                 )}
               </div>
+
+              {!isAdmin && handoffCaseId === activeCase.id && (
+                <div className="help-handoff-panel">
+                  <strong>Private case opened</strong>
+                  <span>Keep all updates here. CatchUp admin can review this case history and reply privately.</span>
+                </div>
+              )}
 
               <div className="help-message-stream">
                 {messageLoading ? (
@@ -237,7 +259,7 @@ export default function HelpDesk({ user, role }) {
                 })}
               </div>
 
-              {activeCase.status === 'resolved' && role !== 'admin' ? (
+              {activeCase.status === 'resolved' && !isAdmin ? (
                 <div className="help-resolved-note">This case is resolved. Replying will reopen it for admin review.</div>
               ) : null}
 
@@ -246,7 +268,7 @@ export default function HelpDesk({ user, role }) {
                   className="premium-input"
                   value={reply}
                   onChange={(event) => setReply(event.target.value)}
-                  placeholder={role === 'admin' ? 'Reply as CatchUp admin...' : 'Add more detail for admin...'}
+                  placeholder={isAdmin ? 'Reply as CatchUp admin...' : 'Add more detail for admin...'}
                   rows={4}
                 />
                 <button type="submit" className="btn btn-primary" disabled={busy || !reply.trim()}>
@@ -257,13 +279,13 @@ export default function HelpDesk({ user, role }) {
           ) : (
             <div className="help-empty-panel">
               <span className="dashboard-kicker">No case selected</span>
-              <h3>{role === 'admin' ? 'No support cases in this filter.' : 'Open your first help case.'}</h3>
+              <h3>{isAdmin ? 'No support cases in this filter.' : 'Open your first help case.'}</h3>
               <p className="dashboard-muted">Private support history will appear here.</p>
             </div>
           )}
         </section>
 
-        {role !== 'admin' && (
+        {!isAdmin && (showNewCaseForm || cases.length === 0) && (
           <form className="premium-card help-new-case" onSubmit={handleCreateCase}>
             <span className="dashboard-kicker">Open a case</span>
             <h3>Tell admin what happened</h3>

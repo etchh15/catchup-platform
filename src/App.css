@@ -1653,6 +1653,10 @@ button.marketplace-summary-item:hover {
   align-items: start;
 }
 
+.help-desk-grid.support-focused {
+  grid-template-columns: minmax(260px, 0.62fr) minmax(0, 1.55fr);
+}
+
 .help-new-case {
   grid-column: 1 / -1;
 }
@@ -1718,6 +1722,26 @@ button.marketplace-summary-item:hover {
 
 .help-case-header p {
   margin: 0;
+  font-size: 13px;
+}
+
+.help-handoff-panel {
+  display: grid;
+  gap: 5px;
+  margin-top: 16px;
+  padding: 13px 15px;
+  border: 1px solid var(--green-border);
+  border-radius: var(--r-sm);
+  background: var(--green-dim);
+}
+
+.help-handoff-panel strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.help-handoff-panel span {
+  color: var(--text-2);
   font-size: 13px;
 }
 
