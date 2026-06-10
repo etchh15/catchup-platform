@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   fetchUserProfile,
   createUserProfile,
+  createSpecialistProfileWithIdentityDocument,
   currentUserIsPlatformAdmin,
   updateUserRole,
 } from '../services/supabaseService';
@@ -44,17 +45,24 @@ export function useProfile(user) {
       .finally(() => setLoading(false));
   }, [user, refreshProfile]);
 
-  const setupRole = async (chosenRole) => {
+  const setupRole = async (chosenRole, options = {}) => {
     if (!user) return;
 
     setLoading(true);
     try {
-      const data = await createUserProfile(
-        user.id,
-        chosenRole,
-        user.email,
-        user.email?.split('@')[0] || 'User'
-      );
+      const data = chosenRole === 'specialist'
+        ? await createSpecialistProfileWithIdentityDocument(
+            user.id,
+            user.email,
+            user.email?.split('@')[0] || 'User',
+            options.idDocumentFile
+          )
+        : await createUserProfile(
+            user.id,
+            chosenRole,
+            user.email,
+            user.email?.split('@')[0] || 'User'
+          );
       setProfile(data);
       setRole(data.role);
     } finally {

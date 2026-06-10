@@ -855,12 +855,18 @@
 
 .identity-card {
   width: 100%;
-  max-width: 560px;
+  max-width: 640px;
   background: var(--surface);
   border: 1px solid var(--border-strong);
   border-radius: var(--r-xl);
   padding: 44px 40px;
   text-align: center;
+}
+
+.identity-option-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
 }
 
 .identity-option {
@@ -880,6 +886,60 @@
 .identity-option .icon { font-size: 34px; margin-bottom: 14px; }
 .identity-option h4 { font-family: var(--font-display); font-size: 17px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
 .identity-option p { font-size: 12px; color: var(--text-3); line-height: 1.5; }
+
+.identity-document-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 18px;
+  text-align: left;
+  background: rgba(28,169,126,0.06);
+  border: 1px solid rgba(28,169,126,0.2);
+  border-radius: var(--r);
+}
+
+.identity-document-panel strong {
+  display: block;
+  color: var(--text);
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.identity-document-panel p {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.identity-document-panel input[type="file"] {
+  margin: 0;
+  color: var(--text-2);
+}
+
+.identity-document-panel input[type="file"]::file-selector-button {
+  margin-right: 12px;
+  padding: 9px 14px;
+  border: 1px solid var(--green-border);
+  border-radius: var(--r-sm);
+  background: var(--green-dim);
+  color: var(--green);
+  font-family: var(--font-body);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.identity-document-file {
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.identity-document-error {
+  color: #FCA5A5;
+  font-size: 13px;
+}
 
 /* ── Marketplace header ── */
 .marketplace-header {

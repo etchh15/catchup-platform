@@ -11,9 +11,11 @@ import {
   fetchWorkspaceRoomByTask,
   rateClient,
   sendWorkspaceMessage,
+  createSpecialistProfileWithIdentityDocument,
   submitReview,
   updateUserRole,
   submitBid,
+  validateSpecialistIdentityDocumentFile,
 } from './supabaseService';
 import { supabase } from '../supabaseClient';
 
@@ -21,6 +23,9 @@ vi.mock('../supabaseClient', () => ({
   supabase: {
     rpc: vi.fn(),
     from: vi.fn(),
+    storage: {
+      from: vi.fn(),
+    },
   },
 }));
 
@@ -73,6 +78,45 @@ test('sendWorkspaceMessage uses the room resolver RPC with room and task identif
 test('updateUserRole refuses privileged roles in the browser service', async () => {
   await expect(updateUserRole('user-1', 'admin')).rejects.toThrow(/Only client and specialist roles/i);
   expect(supabase.from).not.toHaveBeenCalled();
+});
+
+test('updateUserRole refuses specialist role changes without the ID review flow', async () => {
+  await expect(updateUserRole('user-1', 'specialist')).rejects.toThrow(/ID document upload/i);
+  expect(supabase.from).not.toHaveBeenCalled();
+});
+
+test('specialist identity document validation accepts only reviewable ID file types', () => {
+  const validFile = new File(['id'], 'national-id.png', { type: 'image/png' });
+  expect(validateSpecialistIdentityDocumentFile(validFile)).toBe(true);
+
+  const invalidFile = new File(['id'], 'notes.txt', { type: 'text/plain' });
+  expect(() => validateSpecialistIdentityDocumentFile(invalidFile)).toThrow(/JPG, PNG, WEBP, or PDF/i);
+});
+
+test('specialist profile creation uploads ID document before requesting verification RPC', async () => {
+  const file = new File(['id-image'], 'national-id.jpg', { type: 'image/jpeg' });
+  const uploaded = { upload: vi.fn(() => Promise.resolve({ error: null })) };
+  const profile = { id: 'user-1', role: 'specialist', verification_status: 'pending_verification' };
+  supabase.storage.from.mockReturnValue(uploaded);
+  supabase.rpc.mockResolvedValue({ data: profile, error: null });
+
+  await expect(
+    createSpecialistProfileWithIdentityDocument('user-1', 'specialist@example.com', 'Specialist', file)
+  ).resolves.toEqual(profile);
+
+  expect(supabase.storage.from).toHaveBeenCalledWith('specialist-identity-documents');
+  expect(uploaded.upload).toHaveBeenCalledWith(
+    expect.stringMatching(new RegExp('^user-1/identity-\\d+\\.jpg$')),
+    file,
+    expect.objectContaining({ contentType: 'image/jpeg', upsert: false })
+  );
+  expect(supabase.rpc).toHaveBeenCalledWith('create_specialist_profile_with_identity_document', expect.objectContaining({
+    p_email: 'specialist@example.com',
+    p_full_name: 'Specialist',
+    p_original_name: 'national-id.jpg',
+    p_mime_type: 'image/jpeg',
+    p_file_size_bytes: file.size,
+  }));
 });
 
 test('fetchWorkspaceRoomByTask uses latest task-scoped room instead of assuming one client-specialist room', async () => {

@@ -3,6 +3,7 @@ import {
   fetchAbuseEvents,
   fetchAdminAlerts,
   fetchPlatformSettings,
+  createSpecialistIdentityDocumentSignedUrl,
   fetchVerificationQueue,
   fetchWaitlistSignups,
   markAdminAlertReviewed,
@@ -141,10 +142,24 @@ export default function AdminBetaOperations() {
     setBusyId(`${profile.id}-${status}`);
     try {
       const updated = await updateSpecialistVerification(profile.id, status, `Admin set status to ${status}.`);
-      setVerificationQueue((current) => current.map((row) => (row.id === updated.id ? updated : row)));
+      setVerificationQueue((current) => current.map((row) => (row.id === updated.id ? { ...row, ...updated } : row)));
       toast(`${updated.full_name || 'Specialist'} marked ${verificationLabels[status] || status}.`, 'success');
     } catch (err) {
       toast('Could not update verification: ' + (err?.message || 'Unknown error'), 'error');
+    } finally {
+      setBusyId('');
+    }
+  };
+
+  const handleViewIdentityDocument = async (profile) => {
+    setBusyId(`${profile.id}-identity-document`);
+    try {
+      const document = await createSpecialistIdentityDocumentSignedUrl(profile.id);
+      if (!document.signedUrl) throw new Error('Could not create a private document link.');
+      window.open(document.signedUrl, '_blank', 'noopener,noreferrer');
+      toast('Private ID document link opened. It expires in 60 seconds.', 'success');
+    } catch (err) {
+      toast('Could not open ID document: ' + (err?.message || 'Unknown error'), 'error');
     } finally {
       setBusyId('');
     }
@@ -365,8 +380,21 @@ export default function AdminBetaOperations() {
                   <strong>{profile.full_name || profile.email || 'Unnamed specialist'}</strong>
                   <span>{profile.category || profile.professional_title || 'No category'} · {normalizeEgyptMarket(profile.district_tag)}</span>
                   <em>{verificationLabels[profile.verification_status] || profile.verification_status || 'Unverified'} · {profile.account_status || 'active'}</em>
+                  <em>
+                    ID: {profile.identity_document
+                      ? `${profile.identity_document.review_status || 'pending_review'} · ${profile.identity_document.mime_type || 'file'} · ${formatDate(profile.identity_document.uploaded_at)}`
+                      : 'missing document'}
+                  </em>
                 </div>
                 <div className="admin-row-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={Boolean(busyId) || !profile.identity_document}
+                    onClick={() => handleViewIdentityDocument(profile)}
+                  >
+                    View ID
+                  </button>
                   <button type="button" className="btn btn-success btn-sm" disabled={Boolean(busyId)} onClick={() => handleVerification(profile, 'verified')}>
                     Verify
                   </button>

@@ -213,6 +213,9 @@ export async function updateUserRole(userId, newRole) {
   if (!['client', 'specialist'].includes(newRole)) {
     throw new Error('Only client and specialist roles can be selected from the app.');
   }
+  if (newRole === 'specialist') {
+    throw new Error('Specialist role requires an ID document upload and admin verification request.');
+  }
 
   const { data, error } = await supabase
     .from('profiles')
@@ -271,6 +274,52 @@ export async function uploadProfilePhoto(userId, file) {
   return updateUserProfile(userId, { avatar_url: avatarUrl });
 }
 
+export function validateSpecialistIdentityDocumentFile(file) {
+  if (!file) throw new Error('Upload an ID document before requesting specialist review.');
+
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+  if (!allowedTypes.includes(file.type)) {
+    throw new Error('ID document must be a JPG, PNG, WEBP, or PDF file.');
+  }
+
+  if (file.size > 10 * 1024 * 1024) {
+    throw new Error('ID document must be smaller than 10MB.');
+  }
+
+  return true;
+}
+
+export async function createSpecialistProfileWithIdentityDocument(userId, email, fullName, file) {
+  if (!userId) throw new Error('You must be signed in to request specialist review.');
+  validateSpecialistIdentityDocumentFile(file);
+
+  const extension = file.name?.split('.').pop()?.toLowerCase() || (file.type === 'application/pdf' ? 'pdf' : 'jpg');
+  const safeExtension = extension.replace(/[^a-z0-9]/g, '') || 'jpg';
+  const filePath = `${userId}/identity-${Date.now()}.${safeExtension}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('specialist-identity-documents')
+    .upload(filePath, file, {
+      cacheControl: '3600',
+      upsert: false,
+      contentType: file.type,
+    });
+
+  if (uploadError) throw uploadError;
+
+  const { data, error } = await supabase.rpc('create_specialist_profile_with_identity_document', {
+    p_email: email || '',
+    p_full_name: fullName || '',
+    p_storage_path: filePath,
+    p_original_name: file.name || 'identity-document',
+    p_mime_type: file.type,
+    p_file_size_bytes: file.size,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
 export async function currentUserIsPlatformAdmin() {
   const { data, error } = await supabase.rpc('current_user_is_platform_admin');
 
@@ -304,7 +353,28 @@ export async function fetchVerificationQueue() {
     return (fallback.data ?? []).map((profile) => ({ ...profile, account_status: 'active', account_status_note: null }));
   }
   if (error) throw error;
-  return data ?? [];
+  const profiles = data ?? [];
+  const ids = profiles.map((profile) => profile.id).filter(Boolean);
+  if (ids.length === 0) return profiles;
+
+  const { data: documents, error: documentError } = await supabase
+    .from('specialist_identity_documents')
+    .select('profile_id, original_name, mime_type, file_size_bytes, review_status, uploaded_at, reviewed_at')
+    .in('profile_id', ids);
+
+  if (documentError && !isSchemaColumnMissing(documentError) && documentError?.code !== '42P01') {
+    throw documentError;
+  }
+
+  const documentsByProfileId = (documents || []).reduce((map, document) => {
+    map[String(document.profile_id)] = document;
+    return map;
+  }, {});
+
+  return profiles.map((profile) => ({
+    ...profile,
+    identity_document: documentsByProfileId[String(profile.id)] || null,
+  }));
 }
 
 export async function updateSpecialistVerification(profileId, status, note = '') {
@@ -327,7 +397,40 @@ export async function updateSpecialistVerification(profileId, status, note = '')
     .single();
 
   if (error) throw error;
+
+  if (status === 'verified' || status === 'rejected') {
+    await supabase
+      .from('specialist_identity_documents')
+      .update({
+        review_status: status === 'verified' ? 'approved' : 'rejected',
+        reviewed_at: new Date().toISOString(),
+        review_note: note,
+      })
+      .eq('profile_id', profileId);
+  }
+
   return data;
+}
+
+export async function createSpecialistIdentityDocumentSignedUrl(profileId) {
+  const { data: document, error } = await supabase
+    .from('specialist_identity_documents')
+    .select('storage_path, original_name, mime_type')
+    .eq('profile_id', profileId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!document?.storage_path) throw new Error('No ID document is attached to this specialist.');
+
+  const { data, error: signedUrlError } = await supabase.storage
+    .from('specialist-identity-documents')
+    .createSignedUrl(document.storage_path, 60);
+
+  if (signedUrlError) throw signedUrlError;
+  return {
+    ...document,
+    signedUrl: data?.signedUrl,
+  };
 }
 
 export async function fetchAbuseEvents({ status = 'open', limit = 50 } = {}) {
