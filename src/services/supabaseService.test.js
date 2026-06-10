@@ -12,6 +12,7 @@ import {
   fetchWorkspaceRoomByTask,
   rateClient,
   sendWorkspaceMessage,
+  sendHelpCaseMessage,
   createSpecialistProfileWithIdentityDocument,
   submitReview,
   updateHelpCaseStatus,
@@ -175,6 +176,24 @@ test('updateHelpCaseStatus uses the admin status RPC', async () => {
     p_case_id: 'case-1',
     p_status: 'resolved',
   });
+});
+
+test('sendHelpCaseMessage refuses resolved help cases before inserting', async () => {
+  const caseQuery = {
+    select: vi.fn(() => caseQuery),
+    eq: vi.fn(() => caseQuery),
+    maybeSingle: vi.fn(() => Promise.resolve({ data: { id: 'case-1', status: 'resolved' }, error: null })),
+  };
+  supabase.from.mockReturnValue(caseQuery);
+
+  await expect(sendHelpCaseMessage({
+    caseId: 'case-1',
+    senderId: 'user-1',
+    senderRole: 'client',
+    body: 'I still need help',
+  })).rejects.toThrow(/done/i);
+
+  expect(supabase.from).toHaveBeenCalledWith('help_cases');
 });
 
 test('fetchWorkspaceRoomByTask uses latest task-scoped room instead of assuming one client-specialist room', async () => {

@@ -55,6 +55,7 @@ export default function HelpDesk({ user, role }) {
     () => cases.find((item) => item.id === activeCaseId) || cases[0] || null,
     [activeCaseId, cases]
   );
+  const caseIsResolved = activeCase?.status === 'resolved';
 
   const loadCases = async () => {
     setLoading(true);
@@ -123,6 +124,10 @@ export default function HelpDesk({ user, role }) {
   const handleSendReply = async (event) => {
     event.preventDefault();
     if (!activeCase) return;
+    if (caseIsResolved) {
+      toast(isAdmin ? 'Reopen this case before sending another admin reply.' : 'This case is done. Open another case if you still need help.', 'error');
+      return;
+    }
     setBusy(true);
     try {
       await sendHelpCaseMessage({
@@ -259,22 +264,28 @@ export default function HelpDesk({ user, role }) {
                 })}
               </div>
 
-              {activeCase.status === 'resolved' && !isAdmin ? (
-                <div className="help-resolved-note">This case is resolved. Replying will reopen it for admin review.</div>
+              {caseIsResolved ? (
+                <div className="help-resolved-note">
+                  {isAdmin
+                    ? 'This case is done. Reopen it before continuing the support thread.'
+                    : 'This case is done. The private thread is closed, but you can open another case if you still need help.'}
+                </div>
               ) : null}
 
-              <form className="help-reply-form" onSubmit={handleSendReply}>
-                <textarea
-                  className="premium-input"
-                  value={reply}
-                  onChange={(event) => setReply(event.target.value)}
-                  placeholder={isAdmin ? 'Reply as CatchUp admin...' : 'Add more detail for admin...'}
-                  rows={4}
-                />
-                <button type="submit" className="btn btn-primary" disabled={busy || !reply.trim()}>
-                  Send reply
-                </button>
-              </form>
+              {!caseIsResolved && (
+                <form className="help-reply-form" onSubmit={handleSendReply}>
+                  <textarea
+                    className="premium-input"
+                    value={reply}
+                    onChange={(event) => setReply(event.target.value)}
+                    placeholder={isAdmin ? 'Reply as CatchUp admin...' : 'Add more detail for admin...'}
+                    rows={4}
+                  />
+                  <button type="submit" className="btn btn-primary" disabled={busy || !reply.trim()}>
+                    Send reply
+                  </button>
+                </form>
+              )}
             </>
           ) : (
             <div className="help-empty-panel">

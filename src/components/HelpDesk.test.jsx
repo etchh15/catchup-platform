@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import HelpDesk from './HelpDesk';
 import {
@@ -21,6 +21,7 @@ vi.mock('./Toast', () => ({
 }));
 
 afterEach(() => {
+  cleanup();
   vi.clearAllMocks();
 });
 
@@ -77,4 +78,32 @@ test('admin help desk keeps operator status filtering available', async () => {
   expect(await screen.findByRole('combobox')).toBeInTheDocument();
   expect(screen.getByRole('option', { name: 'Waiting on user' })).toBeInTheDocument();
   expect(fetchHelpCases).toHaveBeenCalledWith(expect.objectContaining({ status: 'active' }));
+});
+
+test('resolved client help case is closed to more replies', async () => {
+  fetchHelpCases.mockResolvedValue([
+    {
+      id: 'case-closed',
+      subject: 'Payment question',
+      status: 'resolved',
+      category: 'payment',
+      priority: 'normal',
+      last_message_at: '2026-06-10T12:00:00Z',
+    },
+  ]);
+  fetchHelpCaseMessages.mockResolvedValue([
+    {
+      id: 'message-closed',
+      sender_id: 'admin-1',
+      sender_role: 'admin',
+      body: 'This is handled.',
+      created_at: '2026-06-10T12:05:00Z',
+    },
+  ]);
+
+  render(<HelpDesk user={user} role="client" />);
+
+  expect(await screen.findByText(/This case is done/i)).toBeInTheDocument();
+  await waitFor(() => expect(screen.queryByRole('button', { name: /Send reply/i })).not.toBeInTheDocument());
+  expect(screen.getByRole('button', { name: /Open another case/i })).toBeInTheDocument();
 });

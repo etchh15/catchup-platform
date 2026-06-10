@@ -569,21 +569,39 @@ export async function createHelpCase({ userId, role = 'client', category = 'gene
     senderId: userId,
     senderRole: role === 'specialist' ? 'specialist' : 'client',
     body: cleanBody,
+    skipCaseStatusCheck: true,
   });
 
   return helpCase;
 }
 
-export async function sendHelpCaseMessage({ caseId, senderId, senderRole = 'client', body }) {
+export async function sendHelpCaseMessage({ caseId, senderId, senderRole = 'client', body, skipCaseStatusCheck = false }) {
   const cleanBody = String(body || '').trim();
   if (cleanBody.length < 2) throw new Error('Message is too short.');
+
+  const normalizedRole = senderRole === 'admin' ? 'admin' : senderRole === 'specialist' ? 'specialist' : 'client';
+  if (!skipCaseStatusCheck) {
+    const { data: helpCase, error: caseError } = await supabase
+      .from('help_cases')
+      .select('id, status')
+      .eq('id', caseId)
+      .maybeSingle();
+
+    if (caseError) throw caseError;
+    if (!helpCase) throw new Error('Help case not found.');
+    if (helpCase.status === 'resolved') {
+      throw new Error(normalizedRole === 'admin'
+        ? 'Reopen this help case before sending another admin reply.'
+        : 'This help case is done. Open another case if you still need help.');
+    }
+  }
 
   const { data, error } = await supabase
     .from('help_case_messages')
     .insert([{
       case_id: caseId,
       sender_id: senderId,
-      sender_role: senderRole === 'admin' ? 'admin' : senderRole === 'specialist' ? 'specialist' : 'client',
+      sender_role: normalizedRole,
       body: cleanBody,
     }])
     .select('id, case_id, sender_id, sender_role, body, created_at')
