@@ -115,6 +115,9 @@ export default function Navigation({
                 <button className="nav-dropdown-item" onClick={() => { setActiveTab('profile'); setShowDropdown(false); }}>
                   {t('profileSettings', 'Profile settings')}
                 </button>
+                <button className="nav-dropdown-item" onClick={() => { setActiveTab('help'); setShowDropdown(false); }}>
+                  {t('helpDesk', 'Help Desk')}
+                </button>
                 <button className="nav-dropdown-item danger" onClick={() => { setShowDropdown(false); onSignOut?.(); }}>
                   {t('signOut', 'Sign out')}
                 </button>

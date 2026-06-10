@@ -1622,6 +1622,176 @@ button.marketplace-summary-item:hover {
   border-color: var(--yellow-border);
 }
 
+/* ── Help Desk ── */
+.help-desk-shell {
+  display: grid;
+  gap: 22px;
+}
+
+.help-desk-filter,
+.help-case-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.help-desk-filter .premium-input {
+  width: min(220px, 100%);
+  margin-bottom: 0;
+}
+
+.dashboard-panel-head.compact {
+  margin-bottom: 12px;
+}
+
+.help-desk-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.72fr) minmax(0, 1.45fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.help-new-case {
+  grid-column: 1 / -1;
+}
+
+.help-case-list,
+.help-case-thread,
+.help-new-case {
+  min-width: 0;
+}
+
+.help-case-item {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  padding: 13px;
+  margin-bottom: 10px;
+  text-align: left;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.18s, background 0.18s;
+}
+
+.help-case-item:hover,
+.help-case-item.active {
+  background: rgba(28,169,126,0.08);
+  border-color: var(--green-border);
+}
+
+.help-case-item strong,
+.help-case-item span,
+.help-case-item em,
+.help-case-item small {
+  overflow-wrap: anywhere;
+}
+
+.help-case-item strong {
+  font-size: 14px;
+}
+
+.help-case-item span,
+.help-case-item em,
+.help-case-item small {
+  color: var(--text-2);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.help-case-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.help-case-header h3 {
+  margin: 4px 0 4px;
+}
+
+.help-case-header p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.help-message-stream {
+  display: grid;
+  gap: 12px;
+  max-height: 520px;
+  overflow: auto;
+  padding: 18px 2px;
+}
+
+.help-message {
+  width: min(86%, 680px);
+  padding: 13px 15px;
+  border-radius: var(--r);
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
+}
+
+.help-message.me {
+  justify-self: end;
+  background: rgba(28,169,126,0.09);
+  border-color: rgba(28,169,126,0.22);
+}
+
+.help-message.them {
+  justify-self: start;
+}
+
+.help-message div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.help-message strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.help-message span {
+  color: var(--text-3);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.help-message p {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.help-reply-form,
+.help-new-case {
+  display: grid;
+  gap: 12px;
+}
+
+.help-reply-form .premium-input,
+.help-new-case .premium-input {
+  margin-bottom: 0;
+}
+
+.help-resolved-note,
+.help-empty-panel {
+  padding: 16px;
+  border: 1px solid var(--green-border);
+  border-radius: var(--r);
+  background: var(--green-dim);
+  color: var(--text-2);
+}
+
 /* ── Mobile ── */
 @media (max-width: 920px) {
   .auth-layout {
@@ -1763,8 +1933,27 @@ button.marketplace-summary-item:hover {
   }
   .admin-beta-grid,
   .admin-beta-columns,
+  .help-desk-grid,
   .admin-list-row {
     grid-template-columns: 1fr;
+  }
+  .help-new-case {
+    grid-column: auto;
+  }
+  .help-case-header {
+    display: grid;
+  }
+  .help-case-actions,
+  .help-desk-filter {
+    justify-content: stretch;
+  }
+  .help-case-actions .btn,
+  .help-desk-filter .btn,
+  .help-desk-filter .premium-input {
+    width: 100%;
+  }
+  .help-message {
+    width: 94%;
   }
   .admin-row-actions {
     justify-content: stretch;

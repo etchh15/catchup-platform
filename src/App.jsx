@@ -23,6 +23,7 @@ const AnalyticsLedger = lazy(() => import('./components/AnalyticsLedger'));
 const SystemTelemetry = lazy(() => import('./components/SystemTelemetry'));
 const ProfileHub = lazy(() => import('./components/ProfileHub'));
 const DashboardHome = lazy(() => import('./components/DashboardHome'));
+const HelpDesk = lazy(() => import('./components/HelpDesk'));
 
 const tabRoutes = {
   dashboard: '/',
@@ -31,6 +32,7 @@ const tabRoutes = {
   analytics: '/insights',
   telemetry: '/system',
   profile: '/profile',
+  help: '/help',
 };
 
 function routeToTab(pathname = '/') {
@@ -39,6 +41,7 @@ function routeToTab(pathname = '/') {
   if (pathname.startsWith('/insights')) return 'analytics';
   if (pathname.startsWith('/system')) return 'telemetry';
   if (pathname.startsWith('/profile')) return 'profile';
+  if (pathname.startsWith('/help')) return 'help';
   return 'dashboard';
 }
 
@@ -279,6 +282,7 @@ function CatchUpApp() {
               onProfileUpdated={refreshProfile}
             />
           )}
+          {activeTab === 'help' && <HelpDesk user={user} role={role} />}
         </Suspense>
       </div>
 

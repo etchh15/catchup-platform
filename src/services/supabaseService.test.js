@@ -2,6 +2,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import {
   cancelTask,
   createCompletionReceipt,
+  createHelpCase,
   createNotification,
   expireStaleBidRequests,
   fetchCompletionReceipt,
@@ -13,6 +14,7 @@ import {
   sendWorkspaceMessage,
   createSpecialistProfileWithIdentityDocument,
   submitReview,
+  updateHelpCaseStatus,
   updateUserRole,
   submitBid,
   validateSpecialistIdentityDocumentFile,
@@ -117,6 +119,62 @@ test('specialist profile creation uploads ID document before requesting verifica
     p_mime_type: 'image/jpeg',
     p_file_size_bytes: file.size,
   }));
+});
+
+test('createHelpCase creates a private case and first message', async () => {
+  const helpCase = { id: 'case-1', subject: 'Need help', status: 'open' };
+  const helpMessage = { id: 'message-1', case_id: 'case-1', body: 'Please help' };
+  const caseQuery = {
+    insert: vi.fn(() => caseQuery),
+    select: vi.fn(() => caseQuery),
+    single: vi.fn(() => Promise.resolve({ data: helpCase, error: null })),
+  };
+  const messageQuery = {
+    insert: vi.fn(() => messageQuery),
+    select: vi.fn(() => messageQuery),
+    single: vi.fn(() => Promise.resolve({ data: helpMessage, error: null })),
+  };
+  supabase.from.mockImplementation((table) => {
+    if (table === 'help_cases') return caseQuery;
+    if (table === 'help_case_messages') return messageQuery;
+    throw new Error(`Unexpected table ${table}`);
+  });
+
+  await expect(createHelpCase({
+    userId: 'user-1',
+    role: 'client',
+    category: 'job',
+    priority: 'high',
+    subject: 'Need help',
+    body: 'Please help',
+  })).resolves.toEqual(helpCase);
+
+  expect(supabase.from).toHaveBeenCalledWith('help_cases');
+  expect(caseQuery.insert).toHaveBeenCalledWith([expect.objectContaining({
+    user_id: 'user-1',
+    requester_role: 'client',
+    category: 'job',
+    priority: 'high',
+    subject: 'Need help',
+  })]);
+  expect(messageQuery.insert).toHaveBeenCalledWith([expect.objectContaining({
+    case_id: 'case-1',
+    sender_id: 'user-1',
+    sender_role: 'client',
+    body: 'Please help',
+  })]);
+});
+
+test('updateHelpCaseStatus uses the admin status RPC', async () => {
+  const updated = { id: 'case-1', status: 'resolved' };
+  supabase.rpc.mockResolvedValue({ data: updated, error: null });
+
+  await expect(updateHelpCaseStatus('case-1', 'resolved')).resolves.toEqual(updated);
+
+  expect(supabase.rpc).toHaveBeenCalledWith('resolve_help_case', {
+    p_case_id: 'case-1',
+    p_status: 'resolved',
+  });
 });
 
 test('fetchWorkspaceRoomByTask uses latest task-scoped room instead of assuming one client-specialist room', async () => {

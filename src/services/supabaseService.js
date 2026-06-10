@@ -508,6 +508,101 @@ export async function updateWaitlistSignupStatus(signupId, status) {
   return data;
 }
 
+export async function fetchHelpCases({ role = 'client', userId, status = 'active', limit = 50 } = {}) {
+  let query = supabase
+    .from('help_cases')
+    .select('id, user_id, requester_role, category, priority, status, subject, related_task_id, created_at, updated_at, last_message_at, resolved_at, profiles:user_id(id, email, full_name, role)')
+    .order('last_message_at', { ascending: false })
+    .limit(limit);
+
+  if (role !== 'admin') {
+    query = query.eq('user_id', userId);
+  }
+
+  if (status === 'active') {
+    query = query.neq('status', 'resolved');
+  } else if (status && status !== 'all') {
+    query = query.eq('status', status);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function fetchHelpCaseMessages(caseId) {
+  if (!caseId) return [];
+
+  const { data, error } = await supabase
+    .from('help_case_messages')
+    .select('id, case_id, sender_id, sender_role, body, created_at, profiles:sender_id(id, email, full_name, role)')
+    .eq('case_id', caseId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function createHelpCase({ userId, role = 'client', category = 'general', priority = 'normal', subject, body, relatedTaskId = null }) {
+  const cleanSubject = String(subject || '').trim();
+  const cleanBody = String(body || '').trim();
+  if (cleanSubject.length < 4) throw new Error('Add a short subject for the help case.');
+  if (cleanBody.length < 2) throw new Error('Add a message so admin understands the case.');
+
+  const { data: helpCase, error: caseError } = await supabase
+    .from('help_cases')
+    .insert([{
+      user_id: userId,
+      requester_role: role === 'specialist' ? 'specialist' : 'client',
+      category,
+      priority,
+      subject: cleanSubject,
+      related_task_id: relatedTaskId || null,
+    }])
+    .select('id, user_id, requester_role, category, priority, status, subject, related_task_id, created_at, updated_at, last_message_at, resolved_at')
+    .single();
+
+  if (caseError) throw caseError;
+
+  await sendHelpCaseMessage({
+    caseId: helpCase.id,
+    senderId: userId,
+    senderRole: role === 'specialist' ? 'specialist' : 'client',
+    body: cleanBody,
+  });
+
+  return helpCase;
+}
+
+export async function sendHelpCaseMessage({ caseId, senderId, senderRole = 'client', body }) {
+  const cleanBody = String(body || '').trim();
+  if (cleanBody.length < 2) throw new Error('Message is too short.');
+
+  const { data, error } = await supabase
+    .from('help_case_messages')
+    .insert([{
+      case_id: caseId,
+      sender_id: senderId,
+      sender_role: senderRole === 'admin' ? 'admin' : senderRole === 'specialist' ? 'specialist' : 'client',
+      body: cleanBody,
+    }])
+    .select('id, case_id, sender_id, sender_role, body, created_at')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updateHelpCaseStatus(caseId, status) {
+  const { data, error } = await supabase.rpc('resolve_help_case', {
+    p_case_id: caseId,
+    p_status: status,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
 export async function createUserProfile(userId, role = 'client', email = '', fullName = '') {
   const { data, error } = await supabase
     .from('profiles')
