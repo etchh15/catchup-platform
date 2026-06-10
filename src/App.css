@@ -1901,11 +1901,16 @@ button.marketplace-summary-item:hover {
     order: 3;
     width: 100%;
     display: flex;
-    overflow-x: auto;
-    padding-bottom: 2px;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px 2px;
+    overflow: visible;
+    padding: 0;
   }
   .nav-link {
     flex: 0 0 auto;
+    padding: 8px 10px;
+    font-size: 13px;
   }
   .workspace-layout { grid-template-columns: 1fr; }
   .workspace-sidebar { display: none; }

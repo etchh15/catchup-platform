@@ -8,6 +8,7 @@ export default function Navigation({
   role,
   setRole,
   unreadCount = 0,
+  workspaceUnreadCount = 0,
   setActiveTab,
   activeTab,
   onSignOut,
@@ -24,7 +25,7 @@ export default function Navigation({
   const links = [
     { id: 'dashboard', label: t('home', 'Home') },
     { id: 'marketplace', label: t('browse', 'Browse') },
-    { id: 'messages',    label: t('workspace', 'Workspace'), badge: unreadCount },
+    { id: 'messages',    label: t('workspace', 'Workspace'), badge: workspaceUnreadCount },
     ...(role === 'admin'
       ? [
           { id: 'analytics', label: t('operations', 'Operations') },

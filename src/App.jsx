@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import './App.css';
 import { useNotifications } from './hooks/useNotifications';
 
@@ -45,6 +45,11 @@ function routeToTab(pathname = '/') {
   return 'dashboard';
 }
 
+function isUnreadWorkspaceNotification(notification) {
+  if (!notification || notification.is_read || notification.read_at) return false;
+  return String(notification.action_url || '').startsWith('/workspace/');
+}
+
 function PageLoading() {
   return (
     <div className="loading-screen" style={{ minHeight: 320 }}>
@@ -78,6 +83,10 @@ function CatchUpApp() {
     markAllAsRead,
     clearAll,
   } = useNotifications(user?.id);
+  const workspaceUnreadCount = useMemo(
+    () => notifications.filter(isUnreadWorkspaceNotification).length,
+    [notifications]
+  );
 
   const openWorkspaceRoomByIdOrTaskId = async (identifier) => {
     if (!identifier) return null;
@@ -230,6 +239,7 @@ function CatchUpApp() {
         activeTab={activeTab}
         setActiveTab={navigateToTab}
         unreadCount={unreadCount}
+        workspaceUnreadCount={workspaceUnreadCount}
         notificationLoading={notificationsLoading}
         notifications={notifications}
         onNotificationClick={handleNotificationClick}
@@ -250,7 +260,7 @@ function CatchUpApp() {
               bids={bids}
               specialists={specialists}
               notifications={notifications}
-              unreadCount={unreadCount}
+              unreadCount={workspaceUnreadCount}
               setActiveTab={navigateToTab}
             />
           )}
