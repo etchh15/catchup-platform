@@ -3,7 +3,9 @@ import { fetchAdminEmergencySignals } from '../services/supabaseService';
 
 const signalLabel = (value, fallback = 'Unavailable') => value == null ? fallback : value;
 
-export default function SystemTelemetry({ tasks = [], bids = [], specialists = [] }) {
+const severityRank = { risk: 3, warn: 2, normal: 1 };
+
+export default function SystemTelemetry({ tasks = [], bids = [], specialists = [], setActiveTab }) {
   const [signals, setSignals] = useState(null);
   const [signalError, setSignalError] = useState('');
 
@@ -27,6 +29,110 @@ export default function SystemTelemetry({ tasks = [], bids = [], specialists = [
     pendingBids: bids.filter((bid) => bid.status === 'pending').length,
     unverifiedSpecialists: specialists.filter((specialist) => !specialist.is_verified && specialist.verification_status !== 'verified').length,
   }), [tasks, bids, specialists]);
+
+  const signalCards = useMemo(() => [
+    {
+      key: 'openDisputes',
+      label: 'Open disputes',
+      value: signalLabel(signals?.openDisputes),
+      numericValue: signals?.openDisputes ?? 0,
+      severity: 'risk',
+      destination: ['analytics', '#admin-disputes'],
+      action: 'Review disputes',
+      description: 'Highest trust risk. Resolve before pushing growth.',
+    },
+    {
+      key: 'activeRooms',
+      label: 'Active rooms',
+      value: signalLabel(signals?.activeRooms, localSignals.activeTasks),
+      numericValue: signals?.activeRooms ?? localSignals.activeTasks ?? 0,
+      severity: 'normal',
+      destination: ['messages'],
+      action: 'Open workspaces',
+      description: 'Live jobs with client and specialist activity.',
+    },
+    {
+      key: 'staleOpenTasks',
+      label: 'Stale open jobs',
+      value: signalLabel(signals?.staleOpenTasks),
+      numericValue: signals?.staleOpenTasks ?? 0,
+      severity: 'warn',
+      destination: ['marketplace'],
+      action: 'Review marketplace',
+      description: 'Old demand may need admin intervention or cleanup.',
+    },
+    {
+      key: 'pendingVerification',
+      label: 'Verification queue',
+      value: signalLabel(signals?.pendingVerification, localSignals.unverifiedSpecialists),
+      numericValue: signals?.pendingVerification ?? localSignals.unverifiedSpecialists ?? 0,
+      severity: 'warn',
+      destination: ['analytics', '#admin-verification'],
+      action: 'Verify specialists',
+      description: 'Supply trust gate. Review before accepting more demand.',
+    },
+    {
+      key: 'betaWaitlist',
+      label: 'Beta waitlist',
+      value: signalLabel(signals?.betaWaitlist),
+      numericValue: signals?.betaWaitlist ?? 0,
+      severity: 'normal',
+      destination: ['analytics', '#admin-waitlist'],
+      action: 'Open waitlist',
+      description: 'New demand/supply waiting for operator review.',
+    },
+    {
+      key: 'openAbuseEvents',
+      label: 'Abuse reports',
+      value: signalLabel(signals?.openAbuseEvents),
+      numericValue: signals?.openAbuseEvents ?? 0,
+      severity: 'risk',
+      destination: ['analytics', '#admin-abuse'],
+      action: 'Review abuse',
+      description: 'Safety and fraud queue. Act before users lose trust.',
+    },
+    {
+      key: 'unpaidAcceptedWork',
+      label: 'Unpaid accepted work',
+      value: signalLabel(signals?.unpaidAcceptedWork),
+      numericValue: signals?.unpaidAcceptedWork ?? 0,
+      severity: 'warn',
+      destination: ['marketplace'],
+      action: 'Review jobs',
+      description: 'Accepted work still marked unpaid during beta.',
+    },
+    {
+      key: 'pendingBids',
+      label: 'Pending bids',
+      value: localSignals.pendingBids,
+      numericValue: localSignals.pendingBids,
+      severity: 'normal',
+      destination: ['marketplace'],
+      action: 'Open proposals',
+      description: 'Marketplace liquidity waiting for client action.',
+    },
+  ], [localSignals.activeTasks, localSignals.pendingBids, localSignals.unverifiedSpecialists, signals]);
+
+  const commandItems = useMemo(() => (
+    signalCards
+      .filter((item) => item.numericValue > 0)
+      .sort((a, b) => (severityRank[b.severity] - severityRank[a.severity]) || b.numericValue - a.numericValue)
+      .slice(0, 4)
+  ), [signalCards]);
+
+  const primaryCommand = commandItems[0] || {
+    label: 'No urgent admin action',
+    value: 0,
+    severity: 'normal',
+    destination: ['analytics', '#admin-operations-command'],
+    action: 'Open operations',
+    description: 'Queues are quiet. Keep checking before public marketing pushes.',
+  };
+
+  const handleNavigate = (destination = ['telemetry']) => {
+    const [tab, hash] = destination;
+    setActiveTab?.(tab, hash);
+  };
 
   const checks = [
     { label: 'Database', status: 'Connected',   ok: true,  note: 'Supabase responding normally' },
@@ -60,15 +166,37 @@ export default function SystemTelemetry({ tasks = [], bids = [], specialists = [
           </div>
           <span className="dashboard-alert-count">{signalError || 'Live admin snapshot'}</span>
         </div>
+        <div className={`admin-command-primary ${primaryCommand.severity}`}>
+          <div>
+            <span className="dashboard-kicker">Recommended admin action</span>
+            <h4>{primaryCommand.label}</h4>
+            <p>{primaryCommand.description}</p>
+          </div>
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => handleNavigate(primaryCommand.destination)}>
+            {primaryCommand.action}
+          </button>
+        </div>
+
+        <div className="admin-command-list" aria-label="Ranked admin command queue">
+          {commandItems.length === 0 ? (
+            <div className="admin-command-empty">No urgent queues right now. Keep monitoring before broad public posting.</div>
+          ) : commandItems.map((item) => (
+            <button key={item.key} type="button" className={`admin-command-row ${item.severity}`} onClick={() => handleNavigate(item.destination)}>
+              <strong>{item.value}</strong>
+              <span>{item.label}</span>
+              <em>{item.action}</em>
+            </button>
+          ))}
+        </div>
+
         <div className="admin-signal-grid">
-          <div className="admin-signal risk"><span>Open disputes</span><strong>{signalLabel(signals?.openDisputes)}</strong></div>
-          <div className="admin-signal"><span>Active rooms</span><strong>{signalLabel(signals?.activeRooms, localSignals.activeTasks)}</strong></div>
-          <div className="admin-signal warn"><span>Stale open jobs</span><strong>{signalLabel(signals?.staleOpenTasks)}</strong></div>
-          <div className="admin-signal warn"><span>Verification queue</span><strong>{signalLabel(signals?.pendingVerification, localSignals.unverifiedSpecialists)}</strong></div>
-          <div className="admin-signal"><span>Beta waitlist</span><strong>{signalLabel(signals?.betaWaitlist)}</strong></div>
-          <div className="admin-signal risk"><span>Abuse reports</span><strong>{signalLabel(signals?.openAbuseEvents)}</strong></div>
-          <div className="admin-signal warn"><span>Unpaid accepted work</span><strong>{signalLabel(signals?.unpaidAcceptedWork)}</strong></div>
-          <div className="admin-signal"><span>Pending bids</span><strong>{localSignals.pendingBids}</strong></div>
+          {signalCards.map((item) => (
+            <button key={item.key} type="button" className={`admin-signal ${item.severity === 'normal' ? '' : item.severity}`} onClick={() => handleNavigate(item.destination)}>
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+              <em>{item.action}</em>
+            </button>
+          ))}
         </div>
       </div>
 

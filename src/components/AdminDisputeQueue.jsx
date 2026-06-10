@@ -34,7 +34,7 @@ export default function AdminDisputeQueue() {
   };
 
   return (
-    <section style={{ marginBottom: 32 }}>
+    <section id="admin-disputes" style={{ marginBottom: 32, scrollMarginTop: 120 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 20, marginBottom: 20 }}>
         <div>
           <h2>Admin Dispute Queue</h2>

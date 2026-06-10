@@ -233,7 +233,7 @@ export default function AdminBetaOperations() {
   };
 
   return (
-    <section className="admin-beta-ops">
+    <section id="admin-operations-command" className="admin-beta-ops">
       <div className="dashboard-panel-head">
         <div>
           <span className="dashboard-kicker">Beta operations</span>
@@ -294,7 +294,7 @@ export default function AdminBetaOperations() {
         </article>
       </div>
 
-      <section className="premium-card admin-alerts-panel">
+      <section id="admin-alerts" className="premium-card admin-alerts-panel">
         <div className="dashboard-panel-head">
           <span className="dashboard-kicker">Operator alert outbox</span>
           <span className="dashboard-alert-count">{adminAlerts.length}</span>
@@ -319,7 +319,7 @@ export default function AdminBetaOperations() {
         </div>
       </section>
 
-      <section className="premium-card admin-alerts-panel">
+      <section id="admin-abuse" className="premium-card admin-alerts-panel">
         <div className="dashboard-panel-head">
           <span className="dashboard-kicker">Abuse review queue</span>
           <span className="dashboard-alert-count">{abuseEvents.length}</span>
@@ -348,7 +348,7 @@ export default function AdminBetaOperations() {
       </section>
 
       <div className="admin-beta-columns">
-        <section className="premium-card">
+        <section id="admin-verification" className="premium-card">
           <div className="dashboard-panel-head">
             <span className="dashboard-kicker">Verification queue</span>
             <span className="dashboard-alert-count">{filteredVerificationQueue.length}/{verificationQueue.length}</span>
@@ -418,7 +418,7 @@ export default function AdminBetaOperations() {
           </div>
         </section>
 
-        <section className="premium-card">
+        <section id="admin-waitlist" className="premium-card">
           <div className="dashboard-panel-head">
             <span className="dashboard-kicker">Recent waitlist</span>
             <span className="dashboard-alert-count">{filteredWaitlist.length}/{waitlist.length}</span>

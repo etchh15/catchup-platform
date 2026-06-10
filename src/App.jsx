@@ -50,6 +50,16 @@ function isUnreadWorkspaceNotification(notification) {
   return String(notification.action_url || '').startsWith('/workspace/');
 }
 
+function scrollToHashTarget(hash) {
+  if (!hash) return false;
+  const element = document.querySelector(hash);
+  if (!element) return false;
+  const offset = 112;
+  const top = window.scrollY + element.getBoundingClientRect().top - offset;
+  window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+  return true;
+}
+
 function PageLoading() {
   return (
     <div className="loading-screen" style={{ minHeight: 320 }}>
@@ -168,17 +178,36 @@ function CatchUpApp() {
     }
   }, [activeTab, role]);
 
+  useEffect(() => {
+    if (!window.location.hash) return;
+    const target = window.location.hash;
+    let attempts = 0;
+    const interval = window.setInterval(() => {
+      attempts += 1;
+      scrollToHashTarget(target);
+      if (attempts >= 20) {
+        window.clearInterval(interval);
+      }
+    }, 100);
+    return () => window.clearInterval(interval);
+  }, [activeTab]);
+
   // Setup realtime subscriptions
   useRealtimeSubscriptions(syncData, syncData);
 
-  const navigateToTab = (tab) => {
+  const navigateToTab = (tab, hash = '') => {
     if ((tab === 'analytics' || tab === 'telemetry') && role !== 'admin') {
       tab = 'dashboard';
     }
     setActiveTab(tab);
-    const nextPath = tabRoutes[tab] || '/';
+    const nextPath = `${tabRoutes[tab] || '/'}${hash || ''}`;
     if (window.location.pathname !== nextPath) {
       window.history.pushState({}, '', nextPath);
+    }
+    if (hash) {
+      window.requestAnimationFrame(() => {
+        scrollToHashTarget(hash);
+      });
     }
   };
 
@@ -283,7 +312,7 @@ function CatchUpApp() {
           )}
           {activeTab === 'messages' && <ProjectRoom user={user} activeRoom={activeRoom} />}
           {activeTab === 'analytics' && role === 'admin' && <AnalyticsLedger tasks={tasks} bids={bids} user={user} role={role} />}
-          {activeTab === 'telemetry' && role === 'admin' && <SystemTelemetry tasks={tasks} bids={bids} specialists={specialists} />}
+          {activeTab === 'telemetry' && role === 'admin' && <SystemTelemetry tasks={tasks} bids={bids} specialists={specialists} setActiveTab={navigateToTab} />}
           {activeTab === 'profile' && (
             <ProfileHub
               user={user}
