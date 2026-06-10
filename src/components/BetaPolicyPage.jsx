@@ -26,6 +26,15 @@ const sections = [
     ],
   },
   {
+    title: 'Specialist ID Documents',
+    items: [
+      'First-time specialists must upload a clear government ID document before specialist review.',
+      'ID documents are stored privately and are visible only to the platform admin for verification review.',
+      'CatchUp uses the ID document to reduce anonymous marketplace risk; it does not publish, sell, or share ID photos with clients or specialists.',
+      'During beta, rejected specialist ID documents may be removed after review or within 30 days; approved specialist ID records are retained only while needed for marketplace trust and account safety.',
+    ],
+  },
+  {
     title: 'Disputes And Safety',
     items: [
       'Workspace messages, agreement details, scheduling, delivery, and evidence may be reviewed for disputes.',
